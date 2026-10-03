@@ -93,3 +93,82 @@ shared\python\tests\test_store.py ......                                 [100%]
 ============================= 22 passed in 2.76s ==============================
 ```
 
+---
+
+## Commit 3: api: dev auth, jobs endpoints, dev upload, internal notify
+
+- **Files:**
+  - `api/go.mod` (added `github.com/jackc/pgx/v5` and `pgxpool`)
+  - `api/go.sum`
+  - `api/cmd/server/main.go` (run function, pre-bind startup validation, graceful shutdown)
+  - `api/cmd/server/run_test.go` (startup validation tests)
+  - `api/internal/config/config.go` (AUTH_MODE, APP_ENV, INTERNAL_API_KEY, LoadWith)
+  - `api/internal/auth/auth.go` (User, Identity, DevHeaderSource, JIT Middleware)
+  - `api/internal/auth/auth_test.go` (auth header validation tests)
+  - `api/internal/jobs/jobs.go` (Job domain models, Repository interface)
+  - `api/internal/jobs/uuid.go` (UUID v4 generator with RFC 4122 bits)
+  - `api/internal/jobs/uuid_test.go` (UUID bit compliance tests)
+  - `api/internal/jobs/sanitize.go` (Filename sanitization, upload validation)
+  - `api/internal/jobs/sanitize_test.go` (Sanitization and validation tests)
+  - `api/internal/storage/storage.go` (Store, LocalFS with atomic writes, LocalSigner)
+  - `api/internal/db/postgres.go` (PostgreSQL implementation of UserStore & Job Repository)
+  - `api/internal/server/server.go` (HTTP router and handlers)
+  - `api/internal/server/server_test.go` (Unit tests for endpoints, notify, scoping)
+  - `api/internal/server/integration_test.go` (Integration tests: TestCreateJob_Integration, TestJobScoping_Integration, TestDevUpload_Integration)
+  - `docs/CONTRACTS.md` (Dev auth contract, sanitized blob path, dev upload endpoint, 201 response contract)
+  - `docs/DECISIONS.md` (D-026 404 scoping for unauthorized job queries)
+  - `docs/PHASE1_PROGRESS.md`
+
+### Test Output: Go API Unit & Integration Tests
+
+```
+=== RUN   TestHealthz
+--- PASS: TestHealthz (0.00s)
+=== RUN   TestRun_RefusesEmptyInternalAPIKey
+--- PASS: TestRun_RefusesEmptyInternalAPIKey (0.00s)
+=== RUN   TestRun_RefusesDevAuthWhenNotLocal
+--- PASS: TestRun_RefusesDevAuthWhenNotLocal (0.00s)
+=== RUN   TestRun_RefusesNonDevAuthMode
+--- PASS: TestRun_RefusesNonDevAuthMode (0.00s)
+PASS
+ok  	github.com/Destroyer795/Credenviel/api/cmd/server	0.132s
+=== RUN   TestAuth_MissingHeaders
+--- PASS: TestAuth_MissingHeaders (0.00s)
+=== RUN   TestAuth_InvalidRole
+--- PASS: TestAuth_InvalidRole (0.00s)
+=== RUN   TestAuth_Success
+--- PASS: TestAuth_Success (0.00s)
+PASS
+ok  	github.com/Destroyer795/Credenviel/api/internal/auth	0.464s
+=== RUN   TestSanitizeFilename
+=== RUN   TestSanitizeFilename/neutralizes_path_traversal_with_pdf
+=== RUN   TestSanitizeFilename/neutralizes_windows_path_traversal_with_png
+=== RUN   TestSanitizeFilename/collapses_repeated_underscores_and_strips_leading_dots
+=== RUN   TestSanitizeFilename/replaces_special_characters
+=== RUN   TestSanitizeFilename/caps_at_100_characters_keeping_extension
+=== RUN   TestSanitizeFilename/rejects_traversal_without_allowed_extension_(passwd)
+--- PASS: TestSanitizeFilename (0.00s)
+=== RUN   TestCreateJob_Validation
+--- PASS: TestCreateJob_Validation (0.00s)
+=== RUN   TestUUIDv4_Bits
+--- PASS: TestUUIDv4_Bits (0.00s)
+PASS
+ok  	github.com/Destroyer795/Credenviel/api/internal/jobs	0.353s
+=== RUN   TestCreateJob_Integration
+--- PASS: TestCreateJob_Integration (0.36s)
+=== RUN   TestJobScoping_Integration
+--- PASS: TestJobScoping_Integration (0.09s)
+=== RUN   TestDevUpload_Integration
+--- PASS: TestDevUpload_Integration (0.14s)
+=== RUN   TestNotify_Secret
+--- PASS: TestNotify_Secret (0.00s)
+=== RUN   TestCreateJob_Unit
+--- PASS: TestCreateJob_Unit (0.00s)
+=== RUN   TestJobScoping
+--- PASS: TestJobScoping (0.00s)
+=== RUN   TestDevUpload_Unit
+--- PASS: TestDevUpload_Unit (0.00s)
+PASS
+ok  	github.com/Destroyer795/Credenviel/api/internal/server	0.925s
+```
+

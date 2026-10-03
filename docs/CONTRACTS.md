@@ -62,8 +62,9 @@ In local development and Phase 1 testing, Service Bus is simulated via PostgreSQ
 
 - **Raw uploads:**
   ```
-  raw-uploads/{job_id}/{original_filename}
+  raw-uploads/{job_id}/{sanitized_filename}
   ```
+  *(Phase 1 contract change: uses `{sanitized_filename}` instead of `{original_filename}` to neutralize path traversal and disallowed characters).*
   The `job_id` is embedded in the blob path so the Azure Function extracts it directly from the Event Grid subject URL without performing a preliminary database query.
 
 - **QR-Stamped certificates:**
@@ -130,6 +131,16 @@ Because `jobs.uploader_id` enforces a foreign key constraint referencing `users(
    ```
 3. The resulting `users.id` UUID is injected into the request context as the caller's `user_id` and used as `uploader_id` for all job creation queries.
 
+### Dev Authentication Contract (Phase 1 addition — PROPOSED)
+
+When running in local dev mode (`AUTH_MODE=dev` AND `APP_ENV=local`), Entra ID JWTs are replaced with HTTP headers:
+- `X-Dev-User`: Simulated Entra ID (object ID or subject). Required.
+- `X-Dev-Role`: Simulated user role (`issuer` or `student`). Required.
+- `X-Dev-Name`: Simulated display name. Required.
+
+Any missing or empty header, or any role other than `issuer` or `student`, returns `401 Unauthorized`.
+The JIT user provisioning executes identically using these claims.
+
 ---
 
 ## 5. REST Endpoints — Go API
@@ -172,6 +183,27 @@ Because `jobs.uploader_id` enforces a foreign key constraint referencing `users(
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/internal/v1/jobs/:id/notify` | Worker notifies API of status change (`processed`, `needs_review`, `failed`) to trigger SignalR broadcast |
+
+### Dev Endpoints (Phase 1 addition — active only when AUTH_MODE=dev)
+
+| Method | Path | Description |
+|---|---|---|
+| `PUT` | `/dev/upload/:jobId/:file` | Direct upload simulation endpoint (no auth headers required, mimics SAS URL). Enforces size cap and requires job in `awaiting_upload`. |
+
+### POST /api/v1/jobs Response Contract (Phase 1 update — PROPOSED)
+
+Status: `201 Created`
+```json
+{
+  "job_id": "<uuid>",
+  "blob_key": "raw-uploads/<uuid>/<sanitized_filename>",
+  "upload": {
+    "method": "PUT",
+    "url": "http://127.0.0.1:8080/dev/upload/<uuid>/<sanitized_filename>",
+    "expires_at": "2026-10-04T03:00:00Z"
+  }
+}
+```
 
 ### Authentication & Authorization Rules
 
