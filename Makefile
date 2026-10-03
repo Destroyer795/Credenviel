@@ -11,8 +11,14 @@ down:
 # Apply database migrations (up)
 migrate:
 	@echo "Applying migrations against local Postgres..."
-	@PGPASSWORD=localdev psql -h localhost -U credenviel -d credenviel -f db/migrations/001_initial_schema.up.sql
+	docker compose exec -T postgres psql -U credenviel -d credenviel -f /migrations/001_initial_schema.up.sql
 	@echo "Migrations applied."
+
+# Roll back database migrations (down)
+migrate-down:
+	@echo "Rolling back migrations against local Postgres..."
+	docker compose exec -T postgres psql -U credenviel -d credenviel -f /migrations/001_initial_schema.down.sql
+	@echo "Migrations rolled back."
 
 # Run all tests
 test:
