@@ -1,0 +1,2 @@
+# Worker dependencies
+# Add actual packages as they're needed in implementation phases
