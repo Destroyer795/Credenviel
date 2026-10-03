@@ -9,15 +9,19 @@
 targetScope = 'resourceGroup'
 
 @description('Azure region for all resources')
+#disable-next-line no-unused-params
 param location string = resourceGroup().location
 
 @description('Environment name (dev, staging, prod)')
+#disable-next-line no-unused-params
 param environment string = 'dev'
 
 @description('Container image tag for API')
+#disable-next-line no-unused-params
 param apiImageTag string = 'latest'
 
 @description('Container image tag for Worker')
+#disable-next-line no-unused-params
 param workerImageTag string = 'latest'
 
 // TODO Phase 1: Add module references for each Azure resource
