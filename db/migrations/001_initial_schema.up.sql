@@ -2,7 +2,7 @@
 -- Creates the three core tables: users, jobs, records
 -- Source: docs/DESIGN.md § Database & Data Management
 
--- Use gen_random_uuid() for default UUIDs (requires pgcrypto or PG 13+)
+-- Use gen_random_uuid() for default UUIDs (built-in PG 13+)
 
 CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -31,6 +31,21 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Automatically keep updated_at current on row update
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = clock_timestamp();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_jobs_updated_at ON jobs;
+CREATE TRIGGER trg_jobs_updated_at
+    BEFORE UPDATE ON jobs
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Index on jobs.status: drives dashboard loads (filter by status for listing)
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 
@@ -52,7 +67,8 @@ CREATE TABLE IF NOT EXISTS records (
     -- fields_hash: SHA-256 of the normalized extracted fields (canonical JSON);
     -- lets a verifier confirm field-for-field against a fresh re-scan
     fields_hash             TEXT NOT NULL,
-    -- public_verification_id: random UUID, NOT sequential, to prevent enumeration of records
+    -- public_verification_id: random UUID, NOT sequential, to prevent enumeration of records;
+    -- UNIQUE constraint automatically creates a backing unique index in PostgreSQL
     public_verification_id  UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     -- verified_by_issuer: true for issuer uploads automatically; false for student uploads until issuer confirms
     verified_by_issuer      BOOLEAN NOT NULL DEFAULT false,
@@ -63,9 +79,6 @@ CREATE TABLE IF NOT EXISTS records (
     corrections_json        JSONB,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
--- Index on records.public_verification_id: drives every public verification lookup via QR code
-CREATE INDEX IF NOT EXISTS idx_records_public_verification_id ON records(public_verification_id);
 
 -- Index on records.source_hash: drives public lookups by file hash
 CREATE INDEX IF NOT EXISTS idx_records_source_hash ON records(source_hash);
