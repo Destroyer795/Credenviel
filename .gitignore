@@ -30,6 +30,12 @@ desktop.ini
 pgdata/
 azdata/
 
+# Local dev storage
+.local-storage/
+
+# Test caches
+.pytest_cache/
+
 # Temporary
 _pdf_text.txt
 *.log

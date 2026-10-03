@@ -89,6 +89,14 @@ stateDiagram-v2
 - **Issuer Actions:** The **Go API** updates `jobs.status` and `records` when an issuer resolves a review (`needs_review → processed`) or rejects a submission (`needs_review → failed`).
 - **Cleanup Actions:** The **Azure Function App** updates `jobs.status = 'failed'` for abandoned uploads after SAS expiry or for exhausted DLQ messages.
 
+### Database-Enforced Transition Guard (Phase 1 addition)
+
+A `BEFORE UPDATE OF status` trigger (`trg_jobs_status_guard`) enforces exactly the allowed transitions listed in the state diagram above, **minus** `needs_review → failed` (issuer rejection semantics deferred to Phase 4). Same-status updates are treated as no-ops and pass through. Any disallowed transition raises a `check_violation` error naming both statuses.
+
+Additionally, a `BEFORE INSERT` trigger (`trg_jobs_insert_guard`) ensures all new `jobs` rows start with status `awaiting_upload`. Test fixtures must reach other statuses through valid transitions.
+
+**Phase 1 note:** The Function stand-in also writes `failed` for invalid files (bad magic bytes, oversize) — a new writer path not in the original contract's Writing Authority list. This is recorded as a known deviation.
+
 ---
 
 ## 4. User Provisioning (JIT via Entra ID)

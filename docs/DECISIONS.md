@@ -31,9 +31,27 @@
 
 ---
 
-## Open Decisions
+## Proposed (Phase 1)
 
-*None. All architecture and contract decisions are fully resolved and active.*
+| # | Decision | Status | Rationale |
+|---|---|---|---|
+| D-021 | Add `jobs.failure_reason TEXT` column | PROPOSED | Allows the Function stand-in and worker to record why a job failed (bad magic bytes, oversize, extraction error). Without this, operators cannot diagnose failures without reading logs. |
+| D-022 | Database-enforced status transition guard (`trg_jobs_status_guard`) | PROPOSED | Enforces the allowed transition set at the database level, preventing any buggy service from corrupting job state. Same-status updates pass as no-ops. `needs_review → failed` is excluded pending Phase 4 issuer rejection semantics. |
+| D-023 | Database-enforced insert guard (`trg_jobs_insert_guard`) | PROPOSED | New jobs must start as `awaiting_upload`. Prevents test fixtures or buggy code from inserting jobs in arbitrary states. |
+| D-024 | Function stand-in as `failed` writer for invalid files | PROPOSED | The Function stand-in writes `failed` with `failure_reason` for bad magic bytes, oversize, and extension mismatch. This is a new writer path not in the original CONTRACTS §3 Writing Authority list. |
+
+## Open Questions (Phase 1)
+
+| # | Question | Deferred to |
+|---|---|---|
+| Q-001 | Issuer rejection semantics (`needs_review → failed`, `processed → failed`): who writes, what audit trail? | Phase 4 |
+| Q-002 | Who recomputes `fields_hash` after an issuer correction: DESIGN says the worker, CONTRACTS §3 says the Go API. | Before Phase 4 |
+| Q-003 | Go/Python normalization parity (`lower()` vs `ToLower`, Unicode `\s`, HTML escaping): must be resolved before Go implements the normalizer. | Before Phase 5 |
+| Q-004 | Lost send: if the Function's queue send keeps failing, the job stays `queued` with no message (outbox or sweeper needed). | Phase 6 |
+| Q-005 | Notify is not repeated if a worker crashes after committing but before completing the message. | Phase 5 reconciliation |
+| Q-006 | Phase 2 packaging: the worker Docker build context must be the repo root to include `shared/`; the Function needs `shared/` vendored. | Phase 2 |
+| Q-007 | CONTRACTS says the internal endpoint is protected by "internal ingress"; ingress is configured per app, not per route, so the shared secret may be the only protection. | Phase 2/3 |
+| Q-008 | "Any single cell below threshold → review" may flag too many documents on large marksheets; treat the threshold as tunable. | Phase 4 |
 
 ---
 

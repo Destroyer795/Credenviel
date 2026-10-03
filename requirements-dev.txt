@@ -1,0 +1,5 @@
+# Dev/test dependencies — pinned versions
+# Install: pip install -r requirements-dev.txt
+pytest==8.4.0
+hypothesis==6.122.3
+psycopg[binary]==3.2.6
