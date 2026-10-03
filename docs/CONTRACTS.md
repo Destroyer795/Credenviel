@@ -36,6 +36,17 @@ Only `job_id` is sent. The worker looks up all job metadata (`blob_key`, `upload
    - An Azure Monitor alert fires on any message entering the DLQ (`ActiveMessages > 0` on DLQ entity).
    - A dedicated DLQ-trigger Azure Function reads the dead-lettered message, ensures `jobs.status` is set to `'failed'` in PostgreSQL, logs diagnostic error telemetry, and marks the job for administrator audit.
 
+### Local Queue Peek-Lock Semantics (Phase 1 addition — PROPOSED)
+
+In local development and Phase 1 testing, Service Bus is simulated via PostgreSQL table `local_queue_messages` with peek-lock semantics matching Azure Service Bus:
+- **`receive(lock_duration_seconds=60)`**: Claims 1 message using `FOR UPDATE SKIP LOCKED`, ordered FIFO by `(enqueued_at, id)`. Only rows where `dead_lettered_at IS NULL`, `available_at <= now()`, and `(locked_until IS NULL OR locked_until < now())` are eligible.
+  - If the claimed message already has `delivery_count >= MAX_DELIVERY (5)`, it is immediately dead-lettered with `dead_letter_reason = 'MaxDeliveryCountExceeded'`, and `receive` continues to the next eligible message.
+  - Otherwise, increments `delivery_count`, sets `locked_until = now() + lock_duration`, and generates a fresh `lock_token UUID`.
+- **`complete(message)`**: Deletes the row from `local_queue_messages`. Requires matching `lock_token` and `locked_until >= now()`, else raises `LockLostError`.
+- **`abandon(message)`**: Clears the lock (`locked_until = NULL`, `lock_token = NULL`, `available_at = now()`) making the message available immediately for redelivery. Requires matching `lock_token` and `locked_until >= now()`, else raises `LockLostError`.
+- **`dead_letter(message, reason)`**: Sets `dead_lettered_at = now()` and `dead_letter_reason`, clearing locks. Requires matching `lock_token` and `locked_until >= now()`, else raises `LockLostError`.
+- **Lock expiration**: If a consumer crashes without completing or abandoning, the lock expires when `now() > locked_until`. The message automatically becomes visible again for subsequent `receive()` calls.
+
 ---
 
 ## 2. Blob Container Names & Path Format

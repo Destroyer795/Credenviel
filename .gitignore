@@ -14,6 +14,7 @@ venv/
 frontend/dist/
 api/bin/
 infra/*.json
+*.egg-info/
 
 # IDE
 .vscode/

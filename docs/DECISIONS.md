@@ -39,6 +39,7 @@
 | D-022 | Database-enforced status transition guard (`trg_jobs_status_guard`) | PROPOSED | Enforces the allowed transition set at the database level, preventing any buggy service from corrupting job state. Same-status updates pass as no-ops. `needs_review → failed` is excluded pending Phase 4 issuer rejection semantics. |
 | D-023 | Database-enforced insert guard (`trg_jobs_insert_guard`) | PROPOSED | New jobs must start as `awaiting_upload`. Prevents test fixtures or buggy code from inserting jobs in arbitrary states. |
 | D-024 | Function stand-in as `failed` writer for invalid files | PROPOSED | The Function stand-in writes `failed` with `failure_reason` for bad magic bytes, oversize, and extension mismatch. This is a new writer path not in the original CONTRACTS §3 Writing Authority list. |
+| D-025 | Amend D-007: PostgreSQL-backed local queue (`local_queue_messages`) | PROPOSED | D-007 proposed an in-memory fake queue. However, the Go API, Python worker, and Function stand-in run as independent processes that cannot share in-memory state. A PostgreSQL table `local_queue_messages` with peek-lock semantics (`FOR UPDATE SKIP LOCKED`, `locked_until`, `lock_token`, `delivery_count`, and `dead_lettered_at`) faithfully simulates Service Bus across processes without external dependencies. |
 
 ## Open Questions (Phase 1)
 
