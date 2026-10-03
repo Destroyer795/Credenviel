@@ -1,11 +1,11 @@
 # Interface Contracts
 
-> **Status:** All interface contracts below have been reviewed, aligned with [docs/DECISIONS.md](DECISIONS.md), and are marked **APPROVED / ACTIVE**.
-> These contracts define the canonical boundaries between services.
+> **Status:** All interface contracts below are **APPROVED / ACTIVE**.
+> These contracts define the canonical boundaries, schemas, and interaction protocols between all services.
 
 ---
 
-## 1. Service Bus Message Schema
+## 1. Service Bus Message Schema & Failure Protocol
 
 **Status: APPROVED / ACTIVE**
 
@@ -18,13 +18,23 @@
 }
 ```
 
-Only the `job_id` is sent. The worker looks up all other details (`blob_key`, `uploader_id`, etc.) from PostgreSQL. This keeps the message small and avoids stale data if the job row is updated between enqueue and dequeue.
+Only `job_id` is sent. The worker looks up all job metadata (`blob_key`, `uploader_id`, etc.) directly from PostgreSQL. This keeps queue payloads tiny and prevents stale state if the job row is updated between enqueue and dequeue.
 
-**Dead-letter behavior (Decision D-008):**
-- Service Bus moves a message to the dead-letter queue (DLQ) after the configured max delivery count (5 attempts).
-- An Azure Monitor alert fires on any message landing in the DLQ.
-- If the worker encounters an unrecoverable failure during execution, it marks `jobs.status = 'failed'` directly.
-- If a poison message exhausts delivery attempts without worker recovery, an Azure Function DLQ trigger catches the message and marks `jobs.status = 'failed'` in PostgreSQL.
+### Failure & Completion Protocol (Decision D-008)
+
+1. **Successful Processing / Review Required:**
+   - Worker writes the record to PostgreSQL, updates `jobs.status` (`processed` or `needs_review`), and immediately calls `receiver.complete_message(msg)` to remove the message from Service Bus.
+2. **Unrecoverable Application Error (Fatal Failure):**
+   - E.g., corrupted non-PDF/non-image blob, invalid schema, or permanent parsing error.
+   - Worker directly updates PostgreSQL: `UPDATE jobs SET status = 'failed', updated_at = clock_timestamp() WHERE id = $1;`.
+   - Worker immediately calls `receiver.complete_message(msg)` to remove the message. This prevents futile retries and protects worker throughput.
+3. **Transient Infrastructure Failure (Retries):**
+   - E.g., database connection blip, Azure Document Intelligence 429/503 throttle, or network timeout.
+   - Worker calls `receiver.abandon_message(msg)` (or allows lock duration to expire). Service Bus increments the message delivery count.
+4. **Dead-Letter Handling (Exhausted Retries):**
+   - After reaching max delivery count (5 attempts), Service Bus automatically routes the poison message to the Dead-Letter Queue (DLQ).
+   - An Azure Monitor alert fires on any message entering the DLQ (`ActiveMessages > 0` on DLQ entity).
+   - A dedicated DLQ-trigger Azure Function reads the dead-lettered message, ensures `jobs.status` is set to `'failed'` in PostgreSQL, logs diagnostic error telemetry, and marks the job for administrator audit.
 
 ---
 
@@ -32,154 +42,162 @@ Only the `job_id` is sent. The worker looks up all other details (`blob_key`, `u
 
 **Status: APPROVED / ACTIVE**
 
-| Container | Purpose | Watched by Event Grid? |
-|---|---|---|
-| `raw-uploads` | Incoming certificate scans | **Yes** — blob-created event filtered to this container only |
+| Container | Purpose | Watched by Event Grid? | Access Mechanism |
+|---|---|---|---|
+| `raw-uploads` | Incoming certificate scans directly uploaded by clients | **Yes** — blob-created event filtered strictly to this container | Scoped write-only user-delegation SAS token (15-min TTL) |
+| `stamped-documents` | Generated QR-stamped PDF certificate copies | **No** — prevents infinite Event Grid trigger recursion | Short-lived read SAS or internal worker write |
 
-**Blob path format:**
-```
-raw-uploads/{job_id}/{original_filename}
-```
+### Blob Path Formats
 
-The `job_id` is embedded in the path so the Azure Function can extract it from the blob URL without a database lookup. The user-delegation SAS token (Decision D-005) is scoped to this exact path with write-only permission.
+- **Raw uploads:**
+  ```
+  raw-uploads/{job_id}/{original_filename}
+  ```
+  The `job_id` is embedded in the blob path so the Azure Function extracts it directly from the Event Grid subject URL without performing a preliminary database query.
+
+- **QR-Stamped certificates:**
+  ```
+  stamped-documents/{job_id}/stamped_certificate.pdf
+  ```
+  The stamped PDF is stored by job ID, linked to `records.public_verification_id`, and made downloadable upon public verification or issuer dashboard view.
 
 ---
 
-## 3. Job Status State Machine
+## 3. Job Status State Machine & Writing Authority
 
 **Status: APPROVED / ACTIVE**
 
 ```mermaid
 stateDiagram-v2
-    [*] --> awaiting_upload : API creates job
+    [*] --> awaiting_upload : Go API creates job
     awaiting_upload --> queued : Function validates blob
-    awaiting_upload --> failed : Cleanup Function (SAS expired, no upload)
+    awaiting_upload --> failed : Cleanup Function (SAS expired)
     queued --> processing : Worker picks up message
-    processing --> processed : Worker completes extraction (all fields above threshold)
-    processing --> needs_review : Worker completes extraction (any field below threshold)
-    processing --> failed : Worker error / DLQ trigger
-    needs_review --> processed : Issuer resolves review
+    processing --> processed : Worker completes (all confidences >= threshold)
+    processing --> needs_review : Worker completes (any confidence < threshold)
+    processing --> failed : Worker fatal error / DLQ trigger
+    needs_review --> processed : Issuer resolves & confirms fields
+    needs_review --> failed : Issuer rejects upload
     failed --> [*]
     processed --> [*]
 ```
 
-| Transition | Component | Notes |
-|---|---|---|
-| `→ awaiting_upload` | Go API | Job row created, SAS token issued |
-| `awaiting_upload → queued` | Azure Function | Blob validated (type + size), message enqueued |
-| `awaiting_upload → failed` | Cleanup Function | SAS expired without completed upload |
-| `queued → processing` | Python Worker | Message dequeued, processing begins |
-| `processing → processed` | Python Worker | All fields above confidence threshold |
-| `processing → needs_review` | Python Worker | Any field below confidence threshold |
-| `processing → failed` | Python Worker / DLQ | Unrecoverable error or max retries exceeded |
-| `needs_review → processed` | Go API (issuer action) | Issuer confirms or corrects fields |
+### Writing Authority
+
+- **Status Database Writes:** The **Python Worker** writes `records` rows and updates `jobs.status` (`processing`, `processed`, `needs_review`, `failed`) directly in PostgreSQL in an ACID transaction.
+- **Real-Time Notification:** After writing to PostgreSQL, the worker calls the Go API internal endpoint (`POST /internal/v1/jobs/:id/notify`). The **Go API** then broadcasts the status event to the uploader's Azure SignalR group via the SignalR Service REST API.
+- **Issuer Actions:** The **Go API** updates `jobs.status` and `records` when an issuer resolves a review (`needs_review → processed`) or rejects a submission (`needs_review → failed`).
+- **Cleanup Actions:** The **Azure Function App** updates `jobs.status = 'failed'` for abandoned uploads after SAS expiry or for exhausted DLQ messages.
 
 ---
 
-## 4. REST Endpoints — Go API
+## 4. User Provisioning (JIT via Entra ID)
 
 **Status: APPROVED / ACTIVE**
 
-### Public (no auth)
+Because `jobs.uploader_id` enforces a foreign key constraint referencing `users(id)`, a user row must exist before an upload can be initiated:
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/healthz` | Health check |
-| `GET` | `/api/v1/verify/:publicVerificationId` | Public verification page data |
-
-### Student (requires `Student` role)
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/v1/jobs` | Request an upload (creates job, returns SAS token) |
-| `GET` | `/api/v1/jobs` | List own jobs (filtered by `uploader_id`) |
-| `GET` | `/api/v1/jobs/:id` | Get own job detail |
-
-### Issuer (requires `Issuer` role)
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/v1/jobs` | Request an upload (same endpoint, role determines `verified_by_issuer` auto-set) |
-| `GET` | `/api/v1/jobs` | List all jobs |
-| `GET` | `/api/v1/jobs/:id` | Get any job detail |
-| `POST` | `/api/v1/jobs/bulk` | Bulk upload (create multiple jobs) |
-| `GET` | `/api/v1/review` | List jobs needing review |
-| `POST` | `/api/v1/review/:jobId` | Resolve a `needs_review` flag or confirm a student upload |
-| `DELETE` | `/api/v1/jobs/:id` | Delete a job (admin action on student's explicit request) |
-
-### Internal (worker → API, not externally exposed)
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/internal/v1/jobs/:id/status` | Worker updates job status + triggers SignalR push |
-
-### Auth
-
-| Endpoint group | Auth requirement |
-|---|---|
-| Public | None |
-| Student | Entra JWT with `Student` role in `roles` claim |
-| Issuer | Entra JWT with `Issuer` role in `roles` claim |
-| Internal | Shared secret or managed identity (not user-facing) |
-
-### SignalR negotiate
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/v1/signalr/negotiate` | Returns SignalR connection info for the authenticated user |
+1. When a client makes an authenticated request with a valid Entra ID Bearer JWT, the Go API authentication middleware extracts:
+   - `entra_id`: extracted from token claim `oid` (object ID) or `sub`.
+   - `name`: extracted from token claim `name`.
+   - `role`: derived from Entra app roles claim `roles` (`issuer` or `student`).
+2. The middleware executes an upsert:
+   ```sql
+   INSERT INTO users (entra_id, role, name)
+   VALUES ($1, $2, $3)
+   ON CONFLICT (entra_id) DO UPDATE
+   SET name = EXCLUDED.name, role = EXCLUDED.role
+   RETURNING id;
+   ```
+3. The resulting `users.id` UUID is injected into the request context as the caller's `user_id` and used as `uploader_id` for all job creation queries.
 
 ---
 
-## 5. Normalization Rule for `fields_hash`
+## 5. REST Endpoints — Go API
 
 **Status: APPROVED / ACTIVE**
 
-The `fields_hash` is a SHA-256 digest of the **canonical JSON** representation of extracted fields, computed as follows:
+### Public Endpoints (no auth)
 
-1. Build a JSON object with the extracted fields: `name`, `roll_number`, `register_number`, `degree`, `marks_json`, `cgpa`, `issue_date`.
-2. **Sort keys** alphabetically at all levels.
-3. **Trim** all string values (remove leading/trailing whitespace).
-4. **Case-fold** all string values to lowercase.
-5. **Fixed number format:** represent all numbers without trailing zeros (e.g., `3.5` not `3.50`).
-6. **Fixed date format:** `YYYY-MM-DD` (ISO 8601).
-7. **Marks JSON:** each entry sorted by subject key, values as trimmed/case-folded strings.
-8. Serialize with no extra whitespace (compact JSON).
-9. Compute SHA-256 of the resulting UTF-8 byte string.
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/healthz` | Liveness and health probe |
+| `GET` | `/api/v1/verify/:publicVerificationId` | Public verification record query (rate limited) |
 
-This ensures the same extracted data always produces the same hash, regardless of formatting differences.
+### Student Endpoints (requires `Student` app role)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/jobs` | Initiate upload; returns `job_id` and write-only SAS token for `raw-uploads` |
+| `GET` | `/api/v1/jobs` | List student's own jobs (filtered strictly by `uploader_id`) |
+| `GET` | `/api/v1/jobs/:id` | Get status and details for student's own job |
+| `GET` | `/api/v1/jobs/:id/record` | Get completed record details, hashes, and public verification link |
+| `GET` | `/api/v1/jobs/:id/read-url` | Generate temporary 15-minute read SAS URL to view uploaded document |
+
+### Issuer Endpoints (requires `Issuer` app role)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/jobs` | Initiate single upload (`verified_by_issuer` auto-sets to `true`) |
+| `POST` | `/api/v1/jobs/bulk` | Bulk upload initialization (returns batch of job IDs and SAS tokens) |
+| `GET` | `/api/v1/jobs` | List all jobs across institution with status filtering |
+| `GET` | `/api/v1/jobs/:id` | Get details for any job |
+| `GET` | `/api/v1/review` | List all jobs with status `needs_review` |
+| `GET` | `/api/v1/review/:jobId` | Fetch job metadata, extracted record fields, and temporary `read_sas_url` for side-by-side preview |
+| `POST` | `/api/v1/review/:jobId/resolve` | Resolve review; accepts confirmed/corrected fields, records audit in `corrections_json`, updates status to `processed` |
+| `POST` | `/api/v1/review/:jobId/reject` | Reject submission; accepts `{ "rejection_reason": "string" }`, updates status to `failed`, notifies student via SignalR |
+| `DELETE` | `/api/v1/jobs/:id` | Administrative deletion upon student GDPR/data request |
+
+### Internal Endpoints (Worker → API, internal virtual network only)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/internal/v1/jobs/:id/notify` | Worker notifies API of status change (`processed`, `needs_review`, `failed`) to trigger SignalR broadcast |
+
+### Authentication & Authorization Rules
+
+| Group | Authentication | Details |
+|---|---|---|
+| **Public** | None | Rate limited to 30 requests/minute per client IP |
+| **Student** | Entra ID Bearer JWT | Verified against Azure Entra tenant; must contain `Student` in `roles` claim |
+| **Issuer** | Entra ID Bearer JWT | Verified against Azure Entra tenant; must contain `Issuer` in `roles` claim |
+| **Internal** | Shared Secret Header | Requires `X-Internal-Secret: <INTERNAL_API_KEY>` (managed in Key Vault); restricted to Container Apps internal virtual network ingress |
+
+### SignalR Negotiation
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/signalr/negotiate` | Generates connection URL and user-scoped access token for Azure SignalR Service |
 
 ---
 
-## 6. SignalR
+## 6. Normalization Rule for `fields_hash`
 
 **Status: APPROVED / ACTIVE**
 
-- **Service mode:** Serverless (Azure SignalR Service, not self-hosted).
-- **One group per user ID:** each authenticated user joins a group named after their `user_id`.
-- **Who pushes:** the Go API pushes to SignalR via the SignalR Service REST API after receiving a status update from the worker's internal endpoint call.
-- **Negotiate endpoint:** `POST /api/v1/signalr/negotiate` — returns the SignalR connection URL and access token for the authenticated user.
-- **Message format:**
-```json
-{
-  "target": "jobStatusUpdate",
-  "arguments": [{
-    "job_id": "<uuid>",
-    "status": "<new_status>",
-    "updated_at": "<ISO 8601 timestamp>"
-  }]
-}
-```
+The `fields_hash` is an immutable SHA-256 digest of the **canonical JSON** representation of extracted certificate data. To guarantee deterministic hash identity between Python and Go:
+
+1. **Extract Fields:** Construct an object containing: `name`, `roll_number`, `register_number`, `degree`, `marks_json`, `cgpa`, `issue_date`.
+2. **Unicode Normalization:** Apply Unicode Normalization Form C (`NFC`) to all string values.
+3. **Whitespace Normalization:** Collapse all sequences of whitespace (`\s+`) into a single space `' '`, and trim leading/trailing whitespace.
+4. **Case-Folding:** Case-fold all string values to lowercase.
+5. **String Decimal Representation:** Convert numeric values (e.g. `cgpa`) to canonical formatted strings without trailing zeroes (e.g. `"3.5"`, `"9.85"`). Integer marks are represented as decimal strings (e.g. `"92"`). This eliminates floating-point serialization discrepancies between Go (`float64`) and Python (`float`).
+6. **Strict Date Format:** Standardize dates to `YYYY-MM-DD` (ISO 8601 string).
+7. **Canonical Tabular Marks:** `marks_json` array of objects sorted alphabetically by subject code; values normalized with strings.
+8. **Key Sorting:** Sort all dictionary/object keys alphabetically at all nesting levels.
+9. **Compact Serialization:** Serialize without formatting whitespace (`separators=(',', ':')` in Python, compact encoding in Go).
+10. **Digest:** Compute SHA-256 over the UTF-8 byte stream.
 
 ---
 
-## 7. Confidence Threshold
+## 7. Confidence Threshold & Tabular Marks Rule
 
 **Status: APPROVED / ACTIVE**
 
-- **Starting value:** `0.85` (85%)
-- **Configuration:** environment variable `CONFIDENCE_THRESHOLD`, not hardcoded.
-- **Behavior:** if any field's confidence score falls below this threshold, the job is flagged as `needs_review`.
-- **Tuning:** this value is an empirical parameter tuned during testing against the trained custom model.
+- **Threshold Value:** Initial threshold `0.85` (85%), configured via environment variable `CONFIDENCE_THRESHOLD`.
+- **Scalar Field Evaluation:** Each scalar field (`name`, `roll_number`, `register_number`, `degree`, `cgpa`, `issue_date`) has an OCR confidence score $\in [0.0, 1.0]$. If any scalar score $< \text{CONFIDENCE\_THRESHOLD}$, status becomes `needs_review`.
+- **Tabular Marks Evaluation:** In `marks_json`, each extracted subject row consists of discrete cells (`subject_code`, `subject_name`, `marks_obtained`, `max_marks`, `grade`). Document Intelligence assigns a confidence score to each individual cell. If **any single cell** in the tabular marks falls below $\text{CONFIDENCE\_THRESHOLD}$, the entire job is flagged as `needs_review`.
+- **Review Reason Audit:** The worker stores a breakdown of all sub-threshold fields in `records.confidence_json` to highlight uncertain fields on the issuer review screen.
 
 ---
 
@@ -187,21 +205,22 @@ This ensures the same extracted data always produces the same hash, regardless o
 
 **Status: APPROVED / ACTIVE**
 
-### Public Fields (shown on the verification page)
+### Public Fields
 
-| Field | Shown? |
-|---|---|
-| `name` | ✅ Yes |
-| `roll_number` | ✅ Yes |
-| `degree` | ✅ Yes (stored directly in `records.degree`) |
-| `issue_date` | ✅ Yes |
-| `source_hash` | ✅ Yes |
-| `fields_hash` | ✅ Yes |
-| `verified_by_issuer` | ✅ Yes |
-| `marks_json` (full marks) | ❌ **No** — only summary (e.g., CGPA) is shown |
-| `register_number` | ❌ No — not public |
-| `confidence_json` | ❌ No — internal |
+| Field | Exposed? | Notes |
+|---|---|---|
+| `name` | ✅ Yes | Student legal name |
+| `roll_number` | ✅ Yes | Student institution roll number |
+| `degree` | ✅ Yes | Degree title (e.g., "B.Tech Computer Science") |
+| `cgpa` | ✅ Yes | Overall cumulative grade point average |
+| `issue_date` | ✅ Yes | Date of certificate issuance |
+| `source_hash` | ✅ Yes | SHA-256 of original scan |
+| `fields_hash` | ✅ Yes | Canonical SHA-256 of extracted fields |
+| `verified_by_issuer` | ✅ Yes | Issuer verification confirmation badge |
+| `marks_json` (full subject marks) | ❌ **No** | Privacy protection — detailed transcript marks are not public |
+| `register_number` | ❌ **No** | University private registration identifier |
+| `confidence_json` | ❌ **No** | Pipeline internal OCR metrics |
 
 ### Rate Limiting
 
-- Rate limit on the public verification endpoint to prevent scraping: 30 requests per minute per IP.
+- 30 requests per minute per IP address on `/api/v1/verify/:publicVerificationId`.
