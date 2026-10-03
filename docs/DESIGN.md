@@ -233,7 +233,7 @@ erDiagram
     }
     records {
         uuid id PK
-        uuid job_id FK_UK
+        uuid job_id FK, UK
         string name
         string roll_number
         string register_number
@@ -256,12 +256,12 @@ erDiagram
 
 - **Create:** the API inserts a `jobs` row when it issues the SAS token; a worker inserts a `records` row after extraction.
 - **Read:** the dashboard reads a user's own `jobs`; the verification page reads one `records` row by `public_verification_id`.
-- **Update:** a worker updates `jobs.status`; an issuer resolving a `needs_review` flag, or confirming a student upload, updates `records.verified_by_issuer`, `reviewed_by`, and `reviewed_at`. If the issuer corrects a field, the worker recomputes `fields_hash` from the corrected values and writes the prior values to `records.corrections_json`, so nothing is silently overwritten.
+- **Update:** a worker updates `jobs.status`; an automatic database trigger updates `jobs.updated_at` via `clock_timestamp()`. An issuer resolving a `needs_review` flag, or confirming a student upload, updates `records.verified_by_issuer`, `reviewed_by`, and `reviewed_at`. If the issuer corrects a field, the worker recomputes `fields_hash` from the corrected values and writes the prior values to `records.corrections_json`, so nothing is silently overwritten.
 - **Delete:** scoped to an issuer admin action on a student's explicit request, not exposed elsewhere.
 
 `jobs.blob_key` and `records.job_id` carry unique constraints, and the worker upserts on conflict — so a message Service Bus redelivers after a crash can't create a duplicate row. A job produces at most one record, not exactly one, since a job that ultimately fails produces none.
 
-`jobs.status`, `records.public_verification_id`, and `records.source_hash` are indexed, since status drives dashboard loads and the verification ID and hash drive every public lookup.
+`jobs.status` and `records.source_hash` are indexed; `records.public_verification_id` is indexed automatically by its `UNIQUE` constraint in PostgreSQL.
 
 ---
 
@@ -269,28 +269,44 @@ erDiagram
 
 All infrastructure is defined as code with Bicep, so the environment is torn down and rebuilt identically between sessions rather than clicked together by hand.
 
-- **Source control:** GitHub, one repo with `/frontend`, `/api`, `/worker`, `/infra` folders.
-- **CI/CD:** GitHub Actions builds the React app, the Go API, and the Python worker image on every push to `main`; on success it runs `az deployment group create` against the Bicep templates and pushes the worker image to Azure Container Registry. The registry is provisioned by Bicep before this workflow's first run, since the image push target must already exist.
+- **Source control:** GitHub, one repo with `/frontend`, `/api`, `/worker`, `/functions`, `/infra`, and `/db` folders.
+- **Two-Pass Bicep CI/CD Workflow:** To support declarative image-tag versioning without circular dependencies, the GitHub Actions deployment workflow executes in two Bicep passes:
+  1. **Pass 1 (Core Infrastructure):** Deploys the foundational Azure resources — Azure Container Registry (ACR), Azure Storage Account, PostgreSQL Flexible Server, Azure Key Vault, Azure Service Bus, Azure SignalR Service, and the Container Apps Managed Environment.
+  2. **Image Build & Push:** Docker images for the Go API and Python Worker are built and pushed to the newly created/existing ACR, tagged with the Git commit SHA (`${{ github.sha }}`).
+  3. **Pass 2 (Application Deployment):** Deploys the Container Apps and Function App using Bicep, passing the immutable image tags via the `apiImageTag` and `workerImageTag` Bicep parameters. This eliminates imperative `az containerapp update` commands and prevents configuration drift.
 - **Configuration management:** environment-specific values (connection strings, queue names, model endpoint) are injected as Container Apps environment variables sourced from Key Vault references, not baked into images.
-- **Reproducibility:** a fresh Azure for Students subscription is brought to a working deployment by running the Bicep template, then one `az containerapp update` for the worker image tag. Two manual prerequisites sit outside Bicep: labeling sample certificates and training the custom Document Intelligence model in Document Intelligence Studio, and registering the Entra app used for authentication — both one-time setup steps, documented rather than automated.
-- **Environments:** a single dev/demo environment is sufficient for this project's scope; the Bicep parameters file is the only thing that would change for a second environment.
+- **Reproducibility:** a fresh Azure for Students subscription is brought to a working deployment in one automated GitHub Actions run. Two manual prerequisites sit outside Bicep: labeling sample certificates and training the custom Document Intelligence model in Document Intelligence Studio, and registering the Entra app used for authentication — both one-time setup steps, documented rather than automated.
+- **Environments:** a single dev/demo environment is sufficient for this project's scope; the Bicep parameters file (`parameters/dev.bicepparam`) configures the dev deployment.
 
 ### CI/CD Diagram
 
 ```mermaid
-flowchart LR
-    A[Push to main] --> B[Build React App]
-    A --> C[Build Go API Image]
-    A --> D[Build Python Worker Image]
-    B --> E{All builds pass?}
-    C --> E
-    D --> E
-    E -->|Yes| F["az deployment group create<br/>(Bicep)"]
-    F --> G[Push images to ACR]
-    G --> H[az containerapp update<br/>image tag]
-```
+flowchart TD
+    subgraph S1["Stage 1 · Build & Test"]
+        A[Push to main] --> B[Build React Frontend]
+        A --> C[Test Go API]
+        A --> D[Test Python Worker]
+        A --> E[Test Azure Functions]
+        B --> F{All Tests Pass?}
+        C --> F
+        D --> F
+        E --> F
+    end
 
-> **Note:** The PDF caption says four stages but the diagram effectively shows five steps (build, Bicep deploy, push to ACR, update container apps, and the overall pass/fail gate). See [DECISIONS.md](DECISIONS.md) for this discrepancy.
+    subgraph S2["Stage 2 · Bicep Pass 1 (Core Infra)"]
+        F -->|Yes| G["az deployment group create<br/>Core Infra (ACR, Storage, Postgres, SB, KV, SignalR, Env)"]
+    end
+
+    subgraph S3["Stage 3 · Build & Push Images to ACR"]
+        G --> H["Build & Push Go API Image<br/>tag: ${{ github.sha }}"]
+        G --> I["Build & Push Worker Image<br/>tag: ${{ github.sha }}"]
+    end
+
+    subgraph S4["Stage 4 · Bicep Pass 2 (Apps Deploy)"]
+        H --> J["az deployment group create<br/>Apps Deploy with params:<br/>apiImageTag, workerImageTag"]
+        I --> J
+    end
+```
 
 ---
 
@@ -379,3 +395,46 @@ The 5-uploads/day baseline versus 500-upload burst during results week is an ass
 → See [COST.md](COST.md) for the full budget table, cost guardrails, and the Postgres 7-day auto-restart reminder.
 
 Budget estimate for a full build–test–demo–viva cycle: $20–40 of the $100 credit, driven mainly by active Postgres hours plus the Container Registry's flat fee.
+
+---
+
+## Deviations from the PDF
+
+During engineering analysis and Phase 0 implementation, several practical gaps, ambiguities, and architectural necessities were identified in the source architecture report and resolved. All deviations are documented below and tracked in [DECISIONS.md](DECISIONS.md):
+
+1. **Two-Pass Bicep CI/CD Workflow (D-010):**
+   - *PDF approach:* Mentions deploying Bicep, pushing images, and running imperative `az containerapp update` to set image tags.
+   - *Engineered approach:* Standardized on pure declarative Bicep parameters (`apiImageTag`, `workerImageTag`). To avoid the circular dependency where Container Apps cannot reference an image that has not been pushed to ACR yet, GitHub Actions executes two Bicep passes: Pass 1 creates core infrastructure (including ACR), images are built and pushed to ACR with the Git commit SHA, and Pass 2 deploys the Container Apps with the immutable image tag parameters.
+
+2. **`degree` Column in `records` Table (D-011):**
+   - *PDF approach:* Mentions displaying `degree` on the public verification page, but omits `degree` from the `records` table schema definition.
+   - *Engineered approach:* Explicitly added `degree TEXT` to the `records` table in `db/migrations/001_initial_schema.up.sql`, avoiding runtime extraction heuristics or schema drift.
+
+3. **Dedicated `/functions` Directory (D-001):**
+   - *PDF approach:* Lists only four top-level folders: `/frontend`, `/api`, `/worker`, `/infra`.
+   - *Engineered approach:* Created `/functions` as a standalone Python Azure Function project with its own `host.json`, function bindings, and tests, separate from the Go API.
+
+4. **Dedicated `/db/migrations` Directory (D-002):**
+   - *PDF approach:* Implied database schema without explicit multi-service migration management.
+   - *Engineered approach:* Migrations live in `/db/migrations/` and are mounted into the local PostgreSQL container for local development and CI testing.
+
+5. **Dedicated Container for QR-Stamped Copies (`stamped-documents`):**
+   - *PDF approach:* Mentions producing a QR-stamped PDF certificate copy for printing/verification, but does not allocate a storage container.
+   - *Engineered approach:* Created a separate `stamped-documents` container that Event Grid does *not* monitor (avoiding infinite event loops from the `raw-uploads` event trigger).
+
+6. **Temporary Read SAS for Document Review:**
+   - *PDF approach:* Upload SAS tokens are write-only to `raw-uploads/`. The review screen requires rendering the document side-by-side with extracted fields, but the PDF omitted a read-access mechanism.
+   - *Engineered approach:* The Go API generates a time-limited (15-minute) read-delegation SAS token on `GET /api/v1/review/:jobId` to allow secure in-browser preview without exposing persistent storage credentials.
+
+7. **Automatic `updated_at` Timestamp Trigger:**
+   - *PDF approach:* `jobs` has an `updated_at` column, but PostgreSQL does not update timestamps automatically without a trigger.
+   - *Engineered approach:* Implemented a PostgreSQL `BEFORE UPDATE` trigger on `jobs` utilizing `clock_timestamp()` to guarantee accurate audit trail timing.
+
+8. **Index Deduplication on `public_verification_id`:**
+   - *PDF approach:* Lists an index on `records.public_verification_id` in addition to a `UNIQUE` constraint.
+   - *Engineered approach:* Removed the redundant explicit index creation, since PostgreSQL's `UNIQUE` constraint automatically provisions a backing unique B-tree index.
+
+9. **Two-Tier Failure & Dead-Letter Handling (D-008):**
+   - *PDF approach:* Mentions dead-letter queues and alerts, but does not specify which component sets `jobs.status = 'failed'` upon dead-lettering.
+   - *Engineered approach:* Workers directly set `failed` and complete the message for fatal application errors (e.g. malformed files); a dead-letter queue trigger Function intercepts messages that exhaust max delivery retries (5) and marks `jobs.status = 'failed'`.
+
