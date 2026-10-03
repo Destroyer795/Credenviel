@@ -172,3 +172,47 @@ PASS
 ok  	github.com/Destroyer795/Credenviel/api/internal/server	0.925s
 ```
 
+---
+
+## Commit 4: functions: blob-created core logic and simulate-upload
+
+- **Files:**
+  - `functions/__init__.py`
+  - `functions/core.py` (handle_blob_created, FunctionDeps, HandleResult, validation rules)
+  - `functions/simulate.py` (CLI simulate-upload runner)
+  - `functions/function_app.py` (Azure Function Event Grid handler wiring)
+  - `functions/tests/integration/test_core.py` (Acceptance Test 8: valid queued, idempotency, bad magic, oversize, empty, missing, unknown, mismatch, non-actionable)
+  - `Makefile` (added simulate-upload target)
+  - `pytest.ini` (pythonpath configuration)
+  - `docs/CONTRACTS.md` (Function Idempotency Rule)
+  - `docs/PHASE1_PROGRESS.md`
+
+### Test Output: Functions Integration Test Suite (Acceptance Test 8)
+
+```
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-8.4.0, pluggy-1.6.0 -- C:\Users\PRANAV KISHAN\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+hypothesis profile 'default' -> database=DirectoryBasedExampleDatabase(WindowsPath('C:/Users/PRANAV KISHAN/Desktop/forked trash/Credenviel/.hypothesis/examples'))
+rootdir: C:\Users\PRANAV KISHAN\Desktop\forked trash\Credenviel
+configfile: pytest.ini
+plugins: anyio-4.10.0, hypothesis-6.122.3, asyncio-1.4.0, django-4.12.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 11 items
+
+functions/tests/integration/test_core.py::test_valid_upload_transitions_to_queued_and_enqueues PASSED [  9%]
+functions/tests/integration/test_core.py::test_retry_safe_idempotent_on_queued PASSED [ 18%]
+functions/tests/integration/test_core.py::test_bad_magic_bytes_fails_job PASSED [ 27%]
+functions/tests/integration/test_core.py::test_extension_mismatch_fails_job PASSED [ 36%]
+functions/tests/integration/test_core.py::test_oversize_file_fails_job PASSED [ 45%]
+functions/tests/integration/test_core.py::test_empty_file_fails_job PASSED [ 54%]
+functions/tests/integration/test_core.py::test_missing_blob_does_not_change_job PASSED [ 63%]
+functions/tests/integration/test_core.py::test_unknown_job_does_nothing PASSED [ 72%]
+functions/tests/integration/test_core.py::test_blob_key_mismatch_does_nothing PASSED [ 81%]
+functions/tests/integration/test_core.py::test_non_actionable_status_does_nothing PASSED [ 90%]
+functions/tests/test_function.py::test_function_app_imports PASSED       [100%]
+
+============================= 11 passed in 1.65s ==============================
+```
+
+

@@ -39,6 +39,11 @@ test:
 	@echo "=== Frontend build check ==="
 	cd frontend && npm run build
 
+# Simulate blob-created upload event
+simulate-upload:
+	python -m functions.simulate $(JOB)
+
 # Lint all code
 lint:
 	@echo "TODO: Configure linters (golangci-lint, ruff, eslint)"
+

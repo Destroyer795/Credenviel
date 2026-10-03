@@ -109,6 +109,10 @@ Additionally, a `BEFORE INSERT` trigger (`trg_jobs_insert_guard`) ensures all ne
 
 **Phase 1 note:** The Function stand-in also writes `failed` for invalid files (bad magic bytes, oversize) — a new writer path not in the original contract's Writing Authority list. This is recorded as a known deviation.
 
+### Function Idempotency Rule (Phase 1 addition — PROPOSED)
+
+Retrying a blob-created event on an already `queued` job re-sends the queue message and completes without error. The worker deduplicates redelivered or concurrent duplicate messages atomically via transactional locking (`SELECT FOR UPDATE`), treating redeliveries after completion as safe no-ops.
+
 ---
 
 ## 4. User Provisioning (JIT via Entra ID)
