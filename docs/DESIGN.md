@@ -209,7 +209,7 @@ PostgreSQL Flexible Server holds three core tables.
 |---|---|---|
 | `users` | id, entra_id, role, name | Issuer and student identities, role-tagged — the verifier has no stored identity |
 | `jobs` | id, uploader_id, blob_key, status, created_at, updated_at | One row per uploaded document, tracks pipeline status; `blob_key` is unique |
-| `records` | id, job_id, name, roll_number, register_number, marks_json, cgpa, issue_date, confidence_json, source_hash, fields_hash, public_verification_id, verified_by_issuer, reviewed_by, reviewed_at, corrections_json | Extracted fields, per-field confidence, both integrity hashes, issuer verification status, reviewer audit trail, and prior field values from any correction; `job_id` is unique |
+| `records` | id, job_id, name, roll_number, register_number, degree, marks_json, cgpa, issue_date, confidence_json, source_hash, fields_hash, public_verification_id, verified_by_issuer, reviewed_by, reviewed_at, corrections_json | Extracted fields, per-field confidence, both integrity hashes, issuer verification status, reviewer audit trail, and prior field values from any correction; `job_id` is unique |
 
 ### ER Diagram
 
@@ -237,6 +237,7 @@ erDiagram
         string name
         string roll_number
         string register_number
+        string degree
         jsonb marks_json
         numeric cgpa
         date issue_date

@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 
 -- Index on jobs.status: drives dashboard loads (filter by status for listing)
-CREATE INDEX idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 
 CREATE TABLE IF NOT EXISTS records (
     id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS records (
     name                    TEXT,
     roll_number             TEXT,
     register_number         TEXT,
+    degree                  TEXT,
     marks_json              JSONB,
     cgpa                    NUMERIC,
     issue_date              DATE,
@@ -64,7 +65,7 @@ CREATE TABLE IF NOT EXISTS records (
 );
 
 -- Index on records.public_verification_id: drives every public verification lookup via QR code
-CREATE INDEX idx_records_public_verification_id ON records(public_verification_id);
+CREATE INDEX IF NOT EXISTS idx_records_public_verification_id ON records(public_verification_id);
 
 -- Index on records.source_hash: drives public lookups by file hash
-CREATE INDEX idx_records_source_hash ON records(source_hash);
+CREATE INDEX IF NOT EXISTS idx_records_source_hash ON records(source_hash);

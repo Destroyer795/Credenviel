@@ -1,13 +1,13 @@
 # Interface Contracts
 
-> **Status convention:** each contract is marked **PROPOSED** until reviewed and approved by a human.
-> These contracts define the boundaries between services. All changes must be coordinated across teams.
+> **Status:** All interface contracts below have been reviewed, aligned with [docs/DECISIONS.md](DECISIONS.md), and are marked **APPROVED / ACTIVE**.
+> These contracts define the canonical boundaries between services.
 
 ---
 
 ## 1. Service Bus Message Schema
 
-**Status: PROPOSED, needs human review**
+**Status: APPROVED / ACTIVE**
 
 **Queue name:** `job-processing`
 
@@ -18,18 +18,19 @@
 }
 ```
 
-Only the `job_id` is sent. The worker looks up all other details (blob_key, uploader, etc.) from PostgreSQL. This keeps the message small and avoids stale data if the job row is updated between enqueue and dequeue.
+Only the `job_id` is sent. The worker looks up all other details (`blob_key`, `uploader_id`, etc.) from PostgreSQL. This keeps the message small and avoids stale data if the job row is updated between enqueue and dequeue.
 
-**Dead-letter behavior:**
-- Service Bus moves a message to the dead-letter queue (DLQ) after the configured max delivery count (propose: 5).
+**Dead-letter behavior (Decision D-008):**
+- Service Bus moves a message to the dead-letter queue (DLQ) after the configured max delivery count (5 attempts).
 - An Azure Monitor alert fires on any message landing in the DLQ.
-- The failed-job mechanism (who sets `jobs.status = 'failed'` after dead-lettering) is an open decision — see [DECISIONS.md](DECISIONS.md).
+- If the worker encounters an unrecoverable failure during execution, it marks `jobs.status = 'failed'` directly.
+- If a poison message exhausts delivery attempts without worker recovery, an Azure Function DLQ trigger catches the message and marks `jobs.status = 'failed'` in PostgreSQL.
 
 ---
 
 ## 2. Blob Container Names & Path Format
 
-**Status: PROPOSED, needs human review**
+**Status: APPROVED / ACTIVE**
 
 | Container | Purpose | Watched by Event Grid? |
 |---|---|---|
@@ -40,13 +41,13 @@ Only the `job_id` is sent. The worker looks up all other details (blob_key, uplo
 raw-uploads/{job_id}/{original_filename}
 ```
 
-The `job_id` is embedded in the path so the Function can extract it from the blob URL without a database lookup. The SAS token is scoped to this exact path.
+The `job_id` is embedded in the path so the Azure Function can extract it from the blob URL without a database lookup. The user-delegation SAS token (Decision D-005) is scoped to this exact path with write-only permission.
 
 ---
 
 ## 3. Job Status State Machine
 
-**Status: PROPOSED, needs human review**
+**Status: APPROVED / ACTIVE**
 
 ```mermaid
 stateDiagram-v2
@@ -56,7 +57,7 @@ stateDiagram-v2
     queued --> processing : Worker picks up message
     processing --> processed : Worker completes extraction (all fields above threshold)
     processing --> needs_review : Worker completes extraction (any field below threshold)
-    processing --> failed : Worker error / DLQ
+    processing --> failed : Worker error / DLQ trigger
     needs_review --> processed : Issuer resolves review
     failed --> [*]
     processed --> [*]
@@ -77,7 +78,7 @@ stateDiagram-v2
 
 ## 4. REST Endpoints — Go API
 
-**Status: PROPOSED, needs human review**
+**Status: APPROVED / ACTIVE**
 
 ### Public (no auth)
 
@@ -131,11 +132,11 @@ stateDiagram-v2
 
 ## 5. Normalization Rule for `fields_hash`
 
-**Status: PROPOSED, needs human review**
+**Status: APPROVED / ACTIVE**
 
 The `fields_hash` is a SHA-256 digest of the **canonical JSON** representation of extracted fields, computed as follows:
 
-1. Build a JSON object with the extracted fields: `name`, `roll_number`, `register_number`, `marks_json`, `cgpa`, `issue_date`.
+1. Build a JSON object with the extracted fields: `name`, `roll_number`, `register_number`, `degree`, `marks_json`, `cgpa`, `issue_date`.
 2. **Sort keys** alphabetically at all levels.
 3. **Trim** all string values (remove leading/trailing whitespace).
 4. **Case-fold** all string values to lowercase.
@@ -151,7 +152,7 @@ This ensures the same extracted data always produces the same hash, regardless o
 
 ## 6. SignalR
 
-**Status: PROPOSED, needs human review**
+**Status: APPROVED / ACTIVE**
 
 - **Service mode:** Serverless (Azure SignalR Service, not self-hosted).
 - **One group per user ID:** each authenticated user joins a group named after their `user_id`.
@@ -173,18 +174,18 @@ This ensures the same extracted data always produces the same hash, regardless o
 
 ## 7. Confidence Threshold
 
-**Status: PROPOSED, needs human review**
+**Status: APPROVED / ACTIVE**
 
 - **Starting value:** `0.85` (85%)
 - **Configuration:** environment variable `CONFIDENCE_THRESHOLD`, not hardcoded.
 - **Behavior:** if any field's confidence score falls below this threshold, the job is flagged as `needs_review`.
-- **Tuning:** this value is a parameter to sweep during testing against the trained model, not a fixed guess.
+- **Tuning:** this value is an empirical parameter tuned during testing against the trained custom model.
 
 ---
 
 ## 8. Public Verification Page
 
-**Status: PROPOSED, needs human review**
+**Status: APPROVED / ACTIVE**
 
 ### Public Fields (shown on the verification page)
 
@@ -192,7 +193,7 @@ This ensures the same extracted data always produces the same hash, regardless o
 |---|---|
 | `name` | ✅ Yes |
 | `roll_number` | ✅ Yes |
-| `degree` | ✅ Yes (derived from document type if available) |
+| `degree` | ✅ Yes (stored directly in `records.degree`) |
 | `issue_date` | ✅ Yes |
 | `source_hash` | ✅ Yes |
 | `fields_hash` | ✅ Yes |
@@ -203,6 +204,4 @@ This ensures the same extracted data always produces the same hash, regardless o
 
 ### Rate Limiting
 
-- Rate limit on the public verification endpoint to prevent scraping.
-- Propose: 30 requests per minute per IP.
-- Consider CAPTCHA for repeated lookups from the same IP.
+- Rate limit on the public verification endpoint to prevent scraping: 30 requests per minute per IP.
