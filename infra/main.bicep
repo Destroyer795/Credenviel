@@ -8,6 +8,9 @@
 
 targetScope = 'resourceGroup'
 
+// Parameters declared for Phase 0 scaffolding.
+// Note: #disable-next-line suppressions are temporary and will be removed in Phase 2 as parameters are wired into modules.
+
 @description('Azure region for all resources')
 #disable-next-line no-unused-params
 param location string = resourceGroup().location
@@ -24,7 +27,7 @@ param apiImageTag string = 'latest'
 #disable-next-line no-unused-params
 param workerImageTag string = 'latest'
 
-// TODO Phase 1: Add module references for each Azure resource
+// TODO Phase 2: Wire module references with parameters and remove #disable-next-line suppressions
 // module acr 'modules/acr.bicep' = { ... }
 // module containerAppsEnv 'modules/container-apps-env.bicep' = { ... }
 // module serviceBus 'modules/service-bus.bicep' = { ... }
