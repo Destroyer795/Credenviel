@@ -1,0 +1,316 @@
+[
+  {
+    "id": "case_01_baseline_stub",
+    "description": "Baseline stub extractor fields with high confidence",
+    "parity_risk": false,
+    "fields": {
+      "name": "Jane Doe",
+      "roll_number": "CS2026-001",
+      "register_number": "REG-987654",
+      "degree": "Bachelor of Technology in Computer Science",
+      "marks_json": [
+        {
+          "subject_code": "CS101",
+          "subject_name": "Data Structures",
+          "marks_obtained": "88",
+          "max_marks": "100",
+          "grade": "A"
+        },
+        {
+          "subject_code": "CS102",
+          "subject_name": "Algorithms",
+          "marks_obtained": "92",
+          "max_marks": "100",
+          "grade": "A+"
+        },
+        {
+          "subject_code": "CS103",
+          "subject_name": "Operating Systems",
+          "marks_obtained": "85",
+          "max_marks": "100",
+          "grade": "A"
+        }
+      ],
+      "cgpa": "8.85",
+      "issue_date": "2026-05-15"
+    },
+    "canonical_json": "{\"name\":\"jane doe\",\"roll_number\":\"cs2026-001\",\"register_number\":\"reg-987654\",\"degree\":\"bachelor of technology in computer science\",\"marks_json\":[{\"subject_code\":\"cs101\",\"subject_name\":\"data structures\",\"marks_obtained\":\"88\",\"max_marks\":\"100\",\"grade\":\"a\"},{\"subject_code\":\"cs102\",\"subject_name\":\"algorithms\",\"marks_obtained\":\"92\",\"max_marks\":\"100\",\"grade\":\"a+\"},{\"subject_code\":\"cs103\",\"subject_name\":\"operating systems\",\"marks_obtained\":\"85\",\"max_marks\":\"100\",\"grade\":\"a\"}],\"cgpa\":\"8.85\",\"issue_date\":\"2026-05-15\"}",
+    "expected_hash": "a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a"
+  },
+  {
+    "id": "case_02_shuffled_keys",
+    "description": "Shuffled key order yields identical canonical representation",
+    "parity_risk": false,
+    "fields": {
+      "issue_date": "2026-05-15",
+      "cgpa": "8.85",
+      "degree": "Bachelor of Technology in Computer Science",
+      "name": "Jane Doe",
+      "marks_json": [
+        {
+          "max_marks": "100",
+          "subject_name": "Data Structures",
+          "grade": "A",
+          "marks_obtained": "88",
+          "subject_code": "CS101"
+        },
+        {
+          "grade": "A+",
+          "subject_code": "CS102",
+          "max_marks": "100",
+          "marks_obtained": "92",
+          "subject_name": "Algorithms"
+        },
+        {
+          "subject_name": "Operating Systems",
+          "marks_obtained": "85",
+          "max_marks": "100",
+          "subject_code": "CS103",
+          "grade": "A"
+        }
+      ],
+      "register_number": "REG-987654",
+      "roll_number": "CS2026-001"
+    },
+    "canonical_json": "{\"name\":\"jane doe\",\"roll_number\":\"cs2026-001\",\"register_number\":\"reg-987654\",\"degree\":\"bachelor of technology in computer science\",\"marks_json\":[{\"subject_code\":\"cs101\",\"subject_name\":\"data structures\",\"marks_obtained\":\"88\",\"max_marks\":\"100\",\"grade\":\"a\"},{\"subject_code\":\"cs102\",\"subject_name\":\"algorithms\",\"marks_obtained\":\"92\",\"max_marks\":\"100\",\"grade\":\"a+\"},{\"subject_code\":\"cs103\",\"subject_name\":\"operating systems\",\"marks_obtained\":\"85\",\"max_marks\":\"100\",\"grade\":\"a\"}],\"cgpa\":\"8.85\",\"issue_date\":\"2026-05-15\"}",
+    "expected_hash": "a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a"
+  },
+  {
+    "id": "case_03_extra_whitespace",
+    "description": "Leading, trailing, and repeated whitespace collapsed",
+    "parity_risk": false,
+    "fields": {
+      "name": "   Jane    Doe   ",
+      "roll_number": "  CS2026-001  ",
+      "register_number": "REG-987654\t\n",
+      "degree": "\tBachelor of   Technology \n in Computer Science  ",
+      "marks_json": [
+        {
+          "subject_code": "  CS101  ",
+          "subject_name": "  Data   Structures  ",
+          "marks_obtained": "  88  ",
+          "max_marks": " 100 ",
+          "grade": " A "
+        }
+      ],
+      "cgpa": " 8.85 ",
+      "issue_date": "2026-05-15"
+    },
+    "canonical_json": "{\"name\":\"jane doe\",\"roll_number\":\"cs2026-001\",\"register_number\":\"reg-987654\",\"degree\":\"bachelor of technology in computer science\",\"marks_json\":[{\"subject_code\":\"cs101\",\"subject_name\":\"data structures\",\"marks_obtained\":\"88\",\"max_marks\":\"100\",\"grade\":\"a\"}],\"cgpa\":\"8.85\",\"issue_date\":\"2026-05-15\"}",
+    "expected_hash": "06029496e8c87ec143a685e81f0efee9a5f41e64d8a70c03a9b1137ad3e3ed65"
+  },
+  {
+    "id": "case_04_nfd_normalization",
+    "description": "NFD decomposed characters normalized to NFC",
+    "parity_risk": false,
+    "fields": {
+      "name": "Jäne Döe",
+      "roll_number": "CS2026-001",
+      "register_number": "REG-987654",
+      "degree": "Bàchelor",
+      "marks_json": [],
+      "cgpa": "9.0",
+      "issue_date": "2026-05-15"
+    },
+    "canonical_json": "{\"name\":\"jäne döe\",\"roll_number\":\"cs2026-001\",\"register_number\":\"reg-987654\",\"degree\":\"bàchelor\",\"marks_json\":[],\"cgpa\":\"9\",\"issue_date\":\"2026-05-15\"}",
+    "expected_hash": "ba755a4b0b621affdfe83a4b50b213bebb597aeb086b4f65f50ce3a74032a14d"
+  },
+  {
+    "id": "case_05_casing",
+    "description": "Uppercase normalized to lowercase",
+    "parity_risk": false,
+    "fields": {
+      "name": "JANE DOE",
+      "roll_number": "cs2026-001",
+      "register_number": "reg-987654",
+      "degree": "BACHELOR OF TECHNOLOGY",
+      "marks_json": [
+        {
+          "subject_code": "CS101",
+          "subject_name": "DATA STRUCTURES",
+          "marks_obtained": "88",
+          "max_marks": "100",
+          "grade": "A"
+        }
+      ],
+      "cgpa": "8.8",
+      "issue_date": "2026-05-15"
+    },
+    "canonical_json": "{\"name\":\"jane doe\",\"roll_number\":\"cs2026-001\",\"register_number\":\"reg-987654\",\"degree\":\"bachelor of technology\",\"marks_json\":[{\"subject_code\":\"cs101\",\"subject_name\":\"data structures\",\"marks_obtained\":\"88\",\"max_marks\":\"100\",\"grade\":\"a\"}],\"cgpa\":\"8.8\",\"issue_date\":\"2026-05-15\"}",
+    "expected_hash": "95aed3aa48fc71169d0dc2001dcf6655b8810010a80cb89bcc39833c01d3a4ec"
+  },
+  {
+    "id": "case_06_numeric_decimals",
+    "description": "Trailing zeros stripped from decimals, 92.0 -> 92, 3.50 -> 3.5",
+    "parity_risk": false,
+    "fields": {
+      "name": "Alice Smith",
+      "roll_number": "101",
+      "register_number": "REG-101",
+      "degree": "B.Sc",
+      "marks_json": [
+        {
+          "subject_code": "MATH",
+          "subject_name": "Calculus",
+          "marks_obtained": "92.0",
+          "max_marks": "100.00",
+          "grade": "O"
+        }
+      ],
+      "cgpa": "3.50",
+      "issue_date": "2026-01-01"
+    },
+    "canonical_json": "{\"name\":\"alice smith\",\"roll_number\":\"101\",\"register_number\":\"reg-101\",\"degree\":\"b.sc\",\"marks_json\":[{\"subject_code\":\"math\",\"subject_name\":\"calculus\",\"marks_obtained\":\"92\",\"max_marks\":\"100\",\"grade\":\"o\"}],\"cgpa\":\"3.5\",\"issue_date\":\"2026-01-01\"}",
+    "expected_hash": "8fe82d0ea26a7cabe1062ac5f44bc13241424201e2856081017caf10ba503781"
+  },
+  {
+    "id": "case_07_missing_and_null_fields",
+    "description": "Missing and null fields serialize as JSON null",
+    "parity_risk": false,
+    "fields": {
+      "name": "Bob Builder",
+      "roll_number": null,
+      "register_number": "",
+      "degree": "Engineering",
+      "marks_json": [
+        {
+          "subject_code": "CIVIL1",
+          "subject_name": null,
+          "marks_obtained": "75",
+          "max_marks": "100",
+          "grade": null
+        }
+      ],
+      "cgpa": null,
+      "issue_date": "2026-06-30"
+    },
+    "canonical_json": "{\"name\":\"bob builder\",\"roll_number\":null,\"register_number\":null,\"degree\":\"engineering\",\"marks_json\":[{\"subject_code\":\"civil1\",\"subject_name\":null,\"marks_obtained\":\"75\",\"max_marks\":\"100\",\"grade\":null}],\"cgpa\":null,\"issue_date\":\"2026-06-30\"}",
+    "expected_hash": "97070631dcaaa7870fbb1a7205fdf9ac328a04e84f3002d25659d14ced99d67a"
+  },
+  {
+    "id": "case_08_reordered_marks_rows",
+    "description": "Marks rows sorted deterministically by subject_code",
+    "parity_risk": false,
+    "fields": {
+      "name": "Charlie Brown",
+      "roll_number": "007",
+      "register_number": "REG-007",
+      "degree": "B.A",
+      "marks_json": [
+        {
+          "subject_code": "ZOO301",
+          "subject_name": "Zoology",
+          "marks_obtained": "80",
+          "max_marks": "100",
+          "grade": "A"
+        },
+        {
+          "subject_code": "BOT101",
+          "subject_name": "Botany",
+          "marks_obtained": "85",
+          "max_marks": "100",
+          "grade": "A"
+        },
+        {
+          "subject_code": "CHE201",
+          "subject_name": "Chemistry",
+          "marks_obtained": "90",
+          "max_marks": "100",
+          "grade": "O"
+        }
+      ],
+      "cgpa": "8.5",
+      "issue_date": "2026-07-01"
+    },
+    "canonical_json": "{\"name\":\"charlie brown\",\"roll_number\":\"007\",\"register_number\":\"reg-007\",\"degree\":\"b.a\",\"marks_json\":[{\"subject_code\":\"bot101\",\"subject_name\":\"botany\",\"marks_obtained\":\"85\",\"max_marks\":\"100\",\"grade\":\"a\"},{\"subject_code\":\"che201\",\"subject_name\":\"chemistry\",\"marks_obtained\":\"90\",\"max_marks\":\"100\",\"grade\":\"o\"},{\"subject_code\":\"zoo301\",\"subject_name\":\"zoology\",\"marks_obtained\":\"80\",\"max_marks\":\"100\",\"grade\":\"a\"}],\"cgpa\":\"8.5\",\"issue_date\":\"2026-07-01\"}",
+    "expected_hash": "61af5238235f8029a9214a3fd9ec1db23b598fe530403881cb7f82f3425989e9"
+  },
+  {
+    "id": "case_09_empty_marks",
+    "description": "Empty marks array serializes as empty JSON array []",
+    "parity_risk": false,
+    "fields": {
+      "name": "Daniel Craig",
+      "roll_number": "008",
+      "register_number": "REG-008",
+      "degree": "Certificate of Attendance",
+      "marks_json": [],
+      "cgpa": "0.0",
+      "issue_date": "2026-08-15"
+    },
+    "canonical_json": "{\"name\":\"daniel craig\",\"roll_number\":\"008\",\"register_number\":\"reg-008\",\"degree\":\"certificate of attendance\",\"marks_json\":[],\"cgpa\":\"0\",\"issue_date\":\"2026-08-15\"}",
+    "expected_hash": "84e3849c03270d2adfcec8f57aaf5b566852e915d2895f9a33b5a675dc872d73"
+  },
+  {
+    "id": "case_10_tamil_name",
+    "description": "Non-ASCII Unicode (Tamil script) name preserved in NFC",
+    "parity_risk": false,
+    "fields": {
+      "name": "செல்வ கணேஷ்",
+      "roll_number": "TN-2026",
+      "register_number": "REG-TN-01",
+      "degree": "இளங்கலை அறிவியல்",
+      "marks_json": [
+        {
+          "subject_code": "TAM101",
+          "subject_name": "தமிழ் இலக்கியம்",
+          "marks_obtained": "95",
+          "max_marks": "100",
+          "grade": "O"
+        }
+      ],
+      "cgpa": "9.5",
+      "issue_date": "2026-09-01"
+    },
+    "canonical_json": "{\"name\":\"செல்வ கணேஷ்\",\"roll_number\":\"tn-2026\",\"register_number\":\"reg-tn-01\",\"degree\":\"இளங்கலை அறிவியல்\",\"marks_json\":[{\"subject_code\":\"tam101\",\"subject_name\":\"தமிழ் இலக்கியம்\",\"marks_obtained\":\"95\",\"max_marks\":\"100\",\"grade\":\"o\"}],\"cgpa\":\"9.5\",\"issue_date\":\"2026-09-01\"}",
+    "expected_hash": "6a6cb3078045d30f54a588147241f027a62246e1080e84f13820847989c3bc4a"
+  },
+  {
+    "id": "case_11_parity_turkish_i",
+    "description": "Parity risk: Turkish dotted capital I (U+0130 İ)",
+    "parity_risk": true,
+    "fields": {
+      "name": "İBRAHİM",
+      "roll_number": "TR-01",
+      "register_number": "REG-TR-01",
+      "degree": "Engineering",
+      "marks_json": [],
+      "cgpa": "3.8",
+      "issue_date": "2026-10-01"
+    },
+    "canonical_json": "{\"name\":\"i̇brahi̇m\",\"roll_number\":\"tr-01\",\"register_number\":\"reg-tr-01\",\"degree\":\"engineering\",\"marks_json\":[],\"cgpa\":\"3.8\",\"issue_date\":\"2026-10-01\"}",
+    "expected_hash": "37cee16f34c648796efc3172d8acf8d2c83b7c42f10f453de651e2b568e666b4"
+  },
+  {
+    "id": "case_12_parity_greek_sigma",
+    "description": "Parity risk: Greek final sigma (Σ lowercase vs final ς)",
+    "parity_risk": true,
+    "fields": {
+      "name": "ΟΔΥΣΣΕΥΣ",
+      "roll_number": "GR-01",
+      "register_number": "REG-GR-01",
+      "degree": "Philosophy",
+      "marks_json": [],
+      "cgpa": "4.0",
+      "issue_date": "2026-10-02"
+    },
+    "canonical_json": "{\"name\":\"οδυσσευς\",\"roll_number\":\"gr-01\",\"register_number\":\"reg-gr-01\",\"degree\":\"philosophy\",\"marks_json\":[],\"cgpa\":\"4\",\"issue_date\":\"2026-10-02\"}",
+    "expected_hash": "8a7ae8e3e957f16485aff4de76543d696b8b6b663d63469e2540d7e77ac1a672"
+  },
+  {
+    "id": "case_13_parity_unicode_spaces",
+    "description": "Parity risk: Unicode non-breaking space (U+00A0) and em-space (U+2003)",
+    "parity_risk": true,
+    "fields": {
+      "name": "John Doe",
+      "roll_number": "SP-01",
+      "register_number": "REG SP",
+      "degree": "Science",
+      "marks_json": [],
+      "cgpa": "3.2",
+      "issue_date": "2026-10-03"
+    },
+    "canonical_json": "{\"name\":\"john doe\",\"roll_number\":\"sp-01\",\"register_number\":\"reg sp\",\"degree\":\"science\",\"marks_json\":[],\"cgpa\":\"3.2\",\"issue_date\":\"2026-10-03\"}",
+    "expected_hash": "f6c31fdce1368e3f5874a77be09e723848851ca3c2ac8edaac7c12f102538d10"
+  }
+]

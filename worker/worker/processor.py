@@ -1,0 +1,295 @@
+"""Job processing logic for certificate digitization worker."""
+
+import hashlib
+import json
+import logging
+from typing import Any, Callable
+import urllib.error
+import urllib.request
+import uuid
+
+import psycopg
+from psycopg.types.json import Jsonb
+
+from credenviel_shared.normalizer import compute_fields_hash, canonicalize_fields
+from credenviel_shared.queue import Message, Queue
+from credenviel_shared.store import Store
+from worker.confidence import evaluate_confidence
+from worker.extractor import Extractor
+
+logger = logging.getLogger("worker.processor")
+
+
+class FatalError(Exception):
+    """Unrecoverable processing failure; causes job to fail permanently and message to complete."""
+    pass
+
+
+class SimulatedCrash(BaseException):
+    """Simulates a worker dying abruptly (skips both abandon and complete)."""
+    pass
+
+
+class WorkerProcessor:
+    """Processes messages from queue, performs extraction, hashing, and database persistence."""
+
+    def __init__(
+        self,
+        conn: psycopg.Connection,
+        queue: Queue,
+        store: Store,
+        extractor: Extractor,
+        confidence_threshold: float = 0.85,
+        api_internal_url: str = "http://localhost:8080",
+        internal_api_key: str = "",
+        # Test hooks:
+        before_finalize: Callable[[uuid.UUID], None] | None = None,
+        after_record_upsert: Callable[[uuid.UUID], None] | None = None,
+        extractor_fault: Callable[[uuid.UUID], None] | None = None,
+    ):
+        self.conn = conn
+        self.queue = queue
+        self.store = store
+        self.extractor = extractor
+        self.threshold = confidence_threshold
+        self.api_internal_url = api_internal_url.rstrip("/")
+        self.internal_api_key = internal_api_key
+
+        self.before_finalize = before_finalize
+        self.after_record_upsert = after_record_upsert
+        self.extractor_fault = extractor_fault
+
+    def process_message(self, message: Message) -> str:
+        """Process a single queue message following docs/PHASE1_SPEC.md § 5.7.
+
+        Returns the outcome action ("processed", "needs_review", "failed", "no_op", "abandoned").
+        """
+        # 1. Parse and validate message body
+        body = message.body
+        if not isinstance(body, dict) or "job_id" not in body:
+            logger.error("Malformed message body: %s; dead-lettering", body)
+            self.queue.dead_letter(message, reason="CorruptBody")
+            return "dead_lettered"
+
+        try:
+            job_id = uuid.UUID(str(body["job_id"]))
+        except ValueError:
+            logger.error("Invalid job UUID in message: %s; dead-lettering", body["job_id"])
+            self.queue.dead_letter(message, reason="InvalidJobUUID")
+            return "dead_lettered"
+
+        # Check if job exists in database
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT status, blob_key, uploader_is_issuer FROM jobs WHERE id = %s",
+                (job_id,),
+            )
+            row = cur.fetchone()
+
+        if row is None:
+            logger.error("Job %s not found in database; completing message", job_id)
+            self.queue.complete(message)
+            return "no_op"
+
+        status, blob_key, uploader_is_issuer = row
+
+        # 2. Check current status
+        if status in ("processed", "needs_review", "failed"):
+            logger.info("Job %s is already in final status '%s'; completing as no-op", job_id, status)
+            self.queue.complete(message)
+            return "no_op"
+
+        if status == "awaiting_upload":
+            logger.warning("Job %s is still 'awaiting_upload'; abandoning so it visible in DLQ if stuck", job_id)
+            self.queue.abandon(message)
+            return "abandoned"
+
+        # 3. Transition to 'processing' in a separate transaction
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE jobs
+                    SET status = 'processing'
+                    WHERE id = %s AND status IN ('queued', 'processing')
+                    """,
+                    (job_id,),
+                )
+            if not self.conn.autocommit:
+                self.conn.commit()
+        except Exception as e:
+            logger.error("Failed to set status to 'processing' for job %s: %e", job_id, e)
+            self.queue.abandon(message)
+            return "abandoned"
+
+        # 4. Stream file and compute source_hash, run extractor
+        try:
+            # Fatal error checks
+            if not self.store.exists(blob_key):
+                raise FatalError(f"file missing from storage: {blob_key}")
+
+            file_size = self.store.size(blob_key)
+            if file_size == 0:
+                raise FatalError("file in storage is empty (0 bytes)")
+
+            # Fault injection hook
+            if self.extractor_fault:
+                self.extractor_fault(job_id)
+
+            # Compute source_hash (SHA-256 of raw bytes)
+            hasher = hashlib.sha256()
+            with self.store.open(blob_key) as f:
+                while chunk := f.read(65536):
+                    hasher.update(chunk)
+            source_hash = hasher.hexdigest()
+
+            # Run extractor
+            with self.store.open(blob_key) as f:
+                extraction = self.extractor.extract(f, blob_key)
+
+            # Evaluate confidences
+            all_passed, confidence_json = evaluate_confidence(
+                extraction.field_confidences,
+                extraction.marks_confidences,
+                threshold=self.threshold,
+            )
+
+            # Canonical normalization & fields_hash
+            canonical_fields = canonicalize_fields(extraction.fields)
+            fields_hash = compute_fields_hash(extraction.fields)
+
+            # Hook before finalize
+            if self.before_finalize:
+                self.before_finalize(job_id)
+
+            final_status = "processed" if all_passed else "needs_review"
+
+            # 5. One ACID transaction: SELECT FOR UPDATE, upsert record, update status
+            with self.conn.transaction():
+                with self.conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT status FROM jobs WHERE id = %s FOR UPDATE",
+                        (job_id,),
+                    )
+                    curr_status = cur.fetchone()[0]
+                    if curr_status in ("processed", "needs_review", "failed"):
+                        logger.info("Job %s was finalized concurrently by another worker; rolling back", job_id)
+                        # Will roll back transaction and complete message below
+                        final_status = "no_op"
+                    else:
+                        # Upsert record (never overwrite public_verification_id or verified_by_issuer)
+                        cur.execute(
+                            """
+                            INSERT INTO records (
+                                job_id,
+                                name,
+                                roll_number,
+                                register_number,
+                                degree,
+                                marks_json,
+                                cgpa,
+                                issue_date,
+                                confidence_json,
+                                source_hash,
+                                fields_hash,
+                                verified_by_issuer
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (job_id) DO UPDATE SET
+                                name = EXCLUDED.name,
+                                roll_number = EXCLUDED.roll_number,
+                                register_number = EXCLUDED.register_number,
+                                degree = EXCLUDED.degree,
+                                marks_json = EXCLUDED.marks_json,
+                                cgpa = EXCLUDED.cgpa,
+                                issue_date = EXCLUDED.issue_date,
+                                confidence_json = EXCLUDED.confidence_json,
+                                source_hash = EXCLUDED.source_hash,
+                                fields_hash = EXCLUDED.fields_hash
+                            RETURNING public_verification_id
+                            """,
+                            (
+                                job_id,
+                                canonical_fields["name"],
+                                canonical_fields["roll_number"],
+                                canonical_fields["register_number"],
+                                canonical_fields["degree"],
+                                Jsonb(canonical_fields["marks_json"]) if canonical_fields["marks_json"] is not None else None,
+                                canonical_fields["cgpa"],
+                                canonical_fields["issue_date"],
+                                Jsonb(confidence_json),
+                                source_hash,
+                                fields_hash,
+                                uploader_is_issuer,  # change A
+                            ),
+                        )
+
+                        # Test hook after record upsert
+                        if self.after_record_upsert:
+                            self.after_record_upsert(job_id)
+
+                        # Update job status
+                        cur.execute(
+                            "UPDATE jobs SET status = %s WHERE id = %s",
+                            (final_status, job_id),
+                        )
+
+            # 6. Complete message
+            self.queue.complete(message)
+
+            # 7. Notify API (non-blocking failure)
+            if final_status != "no_op":
+                self._notify_api(job_id, final_status)
+
+            return final_status
+
+        except SimulatedCrash:
+            logger.warning("Simulated worker crash for job %s; skipping abandon/complete", job_id)
+            raise
+
+        except FatalError as e:
+            reason = str(e)
+            logger.error("Fatal error processing job %s: %s", job_id, reason)
+            try:
+                with self.conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE jobs SET status = 'failed', failure_reason = %s WHERE id = %s",
+                        (reason, job_id),
+                    )
+                if not self.conn.autocommit:
+                    self.conn.commit()
+            except Exception as db_err:
+                logger.error("Failed to mark job %s as failed: %s", job_id, db_err)
+
+            self.queue.complete(message)
+            return "failed"
+
+        except Exception as e:
+            logger.exception("Transient failure processing job %s: %s; abandoning message", job_id, e)
+            self.queue.abandon(message)
+            return "abandoned"
+
+    def _notify_api(self, job_id: uuid.UUID, status: str) -> None:
+        """Call internal notify endpoint with X-Internal-Secret."""
+        if not self.internal_api_key or not self.api_internal_url:
+            return
+
+        url = f"{self.api_internal_url}/internal/v1/jobs/{job_id}/notify"
+        payload = json.dumps({"job_id": str(job_id), "status": status}).encode("utf-8")
+
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "X-Internal-Secret": self.internal_api_key,
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status != 204:
+                    logger.warning("API notify returned unexpected status code: %s", resp.status)
+        except Exception as e:
+            # Swallow notify failure; it must not fail the job
+            logger.warning("Failed to notify API for job %s: %s (swallowed)", job_id, e)

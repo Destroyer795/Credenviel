@@ -8,8 +8,7 @@ import psycopg
 from credenviel_shared.local_queue import LocalQueue
 from credenviel_shared.store import LocalFileStore
 from credenviel_shared.testdb import (
-    get_test_dsn,
-    assert_is_test_db,
+    get_test_connection,
     truncate_all_tables,
 )
 from functions.core import FunctionDeps, handle_blob_created
@@ -19,8 +18,7 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def test_conn():
-    conn = psycopg.connect(get_test_dsn(), autocommit=True)
-    assert_is_test_db(conn)
+    conn = get_test_connection(autocommit=True)
     truncate_all_tables(conn)
     yield conn
     conn.close()

@@ -5,6 +5,14 @@ from credenviel_shared.local_queue import LocalQueue
 from credenviel_shared.store import Store, LocalFileStore
 from credenviel_shared.filetype import detect_magic, validate_magic
 
+from credenviel_shared.normalizer import (
+    compute_fields_hash,
+    to_canonical_json,
+    canonicalize_fields,
+    CANONICAL_KEYS,
+    MARKS_CELL_KEYS,
+)
+
 __all__ = [
     "Queue",
     "Message",
@@ -16,4 +24,9 @@ __all__ = [
     "LocalFileStore",
     "detect_magic",
     "validate_magic",
+    "compute_fields_hash",
+    "to_canonical_json",
+    "canonicalize_fields",
+    "CANONICAL_KEYS",
+    "MARKS_CELL_KEYS",
 ]

@@ -215,4 +215,68 @@ functions/tests/test_function.py::test_function_app_imports PASSED       [100%]
 ============================= 11 passed in 1.65s ==============================
 ```
 
+---
+
+## Commit 5: worker: queue loop, stub extractor, hashing, atomic finalize
+
+- **Files:**
+  - `shared/python/credenviel_shared/normalizer.py` (canonical NFC string pipeline, Decimal normalization, 5-key marks rows sorting, canonical JSON serialization, fields_hash SHA-256)
+  - `shared/python/credenviel_shared/testdb.py` (ensure_test_database, ensure_test_schema, get_test_connection)
+  - `shared/test-vectors/fields_hash.json` (13 test vectors including stub baseline, shuffled keys, Unicode whitespace, NFD vs NFC, trailing zeros, missing/null, Tamil non-ASCII name, and parity risk cases independently verified via GNU sha256sum)
+  - `shared/test-vectors/README.md`
+  - `worker/worker/extractor.py` (StubExtractor with high, low, and single_low_marks profiles)
+  - `worker/worker/confidence.py` (evaluate_confidence per field and marks table cell, formatted confidence_json)
+  - `worker/worker/processor.py` (WorkerProcessor implementing spec § 5.7: validation, dead-lettering, status mark, source_hash streaming, stub extraction, canonical normalization, fields_hash, ACID SELECT FOR UPDATE with record upsert preserving public_verification_id, API notify with X-Internal-Secret)
+  - `worker/worker/config.py` and `worker/worker/__main__.py` (CLI flags: `--stub-extractor` required with exit 2 if absent, `--once`, `--stub-profile`, `--poll-interval`)
+  - `worker/tests/test_normalizer_and_vectors.py` (Acceptance Test 17: 13 test vectors verified, trailing zero tests, hypothesis property-based tests for key ordering, whitespace collapsing, field mutation hash changes)
+  - `worker/tests/test_worker.py` (Smoke and CLI tests: `--help`, `--stub-extractor --once`, missing flag exit 2)
+  - `worker/tests/integration/__init__.py`
+  - `worker/tests/integration/test_processor.py` (Acceptance Tests 9-16: happy path student/issuer, low profile needs_review, single low marks cell needs_review, redelivery idempotency no-op, concurrent duplicates single record, crash simulation lock expiry redelivery, transient retries & DLQ max delivery, fatal missing/empty/unsupported file, notify resilience & secret header, record/status atomic rollback)
+  - `functions/tests/integration/test_core.py` (updated to use get_test_connection)
+  - `docs/DECISIONS.md` (D-027 normalizer choices, D-028 confidence shape, D-029 worker error categorization)
+  - `docs/PHASE1_PROGRESS.md`
+
+### Test Output: Worker Test Suite (Acceptance Tests 9 to 17)
+
+```
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-8.4.0, pluggy-1.6.0 -- C:\Users\PRANAV KISHAN\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+hypothesis profile 'default' -> database=DirectoryBasedExampleDatabase(WindowsPath('C:/Users/PRANAV KISHAN/Desktop/forked trash/Credenviel/.hypothesis/examples'))
+rootdir: C:\Users\PRANAV KISHAN\Desktop\forked trash\Credenviel
+configfile: pytest.ini
+plugins: anyio-4.10.0, hypothesis-6.122.3, asyncio-1.4.0, django-4.12.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 25 items
+
+worker/tests/integration/test_processor.py::test_happy_path_student PASSED [  4%]
+worker/tests/integration/test_processor.py::test_happy_path_issuer PASSED [  8%]
+worker/tests/integration/test_processor.py::test_low_profile_needs_review PASSED [ 12%]
+worker/tests/integration/test_processor.py::test_single_low_marks_cell_needs_review PASSED [ 16%]
+worker/tests/integration/test_processor.py::test_redelivery_after_completion_is_noop PASSED [ 20%]
+worker/tests/integration/test_processor.py::test_concurrent_duplicates_single_record PASSED [ 24%]
+worker/tests/integration/test_processor.py::test_crash_then_lock_expiry_redelivers PASSED [ 28%]
+worker/tests/integration/test_processor.py::test_transient_twice_then_success PASSED [ 32%]
+worker/tests/integration/test_processor.py::test_exceeding_max_delivery_dead_letters PASSED [ 36%]
+worker/tests/integration/test_processor.py::test_fatal_missing_file PASSED [ 40%]
+worker/tests/integration/test_processor.py::test_fatal_empty_file PASSED [ 44%]
+worker/tests/integration/test_processor.py::test_fatal_unsupported_file PASSED [ 48%]
+worker/tests/integration/test_processor.py::test_notify_failure_does_not_fail_job PASSED [ 52%]
+worker/tests/integration/test_processor.py::test_notify_carries_secret_header_and_payload PASSED [ 56%]
+worker/tests/integration/test_processor.py::test_record_and_status_atomic PASSED [ 60%]
+worker/tests/test_normalizer_and_vectors.py::test_vectors PASSED         [ 64%]
+worker/tests/test_normalizer_and_vectors.py::test_numeric_trailing_zeros PASSED [ 68%]
+worker/tests/test_normalizer_and_vectors.py::test_property_key_ordering PASSED [ 72%]
+worker/tests/test_normalizer_and_vectors.py::test_property_whitespace_collapsing PASSED [ 76%]
+worker/tests/test_normalizer_and_vectors.py::test_property_modifying_field_changes_hash PASSED [ 80%]
+worker/tests/test_worker.py::test_worker_imports PASSED                  [ 84%]
+worker/tests/test_worker.py::test_worker_config_defaults PASSED          [ 88%]
+worker/tests/test_worker.py::test_worker_cli_help PASSED                 [ 92%]
+worker/tests/test_worker.py::test_worker_stub_extractor_flag PASSED      [ 96%]
+worker/tests/test_worker.py::test_worker_fails_without_stub_extractor PASSED [100%]
+
+============================= 25 passed in 4.83s ==============================
+```
+
+
 
