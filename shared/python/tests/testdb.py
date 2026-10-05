@@ -1,8 +1,8 @@
 """Database test utilities with safety guards for credenviel_test."""
 
 import os
+from pathlib import Path
 import psycopg
-
 
 TEST_DB_NAME = "credenviel_test"
 
@@ -56,9 +56,6 @@ def assert_is_test_db(conn: psycopg.Connection):
         )
 
 
-from pathlib import Path
-
-
 def ensure_test_schema(conn: psycopg.Connection):
     """Ensure migrations 001, 002, and local queue 001 are applied in credenviel_test."""
     assert_is_test_db(conn)
@@ -89,7 +86,6 @@ def truncate_all_tables(conn: psycopg.Connection):
     assert_is_test_db(conn)
     ensure_test_schema(conn)
     with conn.cursor() as cur:
-        # Check if tables exist before truncating
         cur.execute(
             """
             SELECT table_name FROM information_schema.tables
@@ -106,4 +102,3 @@ def truncate_all_tables(conn: psycopg.Connection):
             cur.execute(f"TRUNCATE TABLE {', '.join(tables_to_truncate)} CASCADE")
     if not conn.autocommit:
         conn.commit()
-

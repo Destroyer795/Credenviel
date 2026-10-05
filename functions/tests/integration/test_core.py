@@ -7,7 +7,7 @@ import psycopg
 
 from credenviel_shared.local_queue import LocalQueue
 from credenviel_shared.store import LocalFileStore
-from credenviel_shared.testdb import (
+from testdb import (
     get_test_connection,
     truncate_all_tables,
 )

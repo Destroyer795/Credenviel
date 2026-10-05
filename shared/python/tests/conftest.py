@@ -4,7 +4,7 @@ import os
 import pytest
 import psycopg
 
-from credenviel_shared.testdb import (
+from testdb import (
     TEST_DB_NAME,
     get_test_dsn,
     get_maintenance_dsn,
