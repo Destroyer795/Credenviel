@@ -31,30 +31,30 @@ class StubExtractor(Extractor):
         # Read stream to simulate consuming input
         _ = stream.read()
 
-        # Fixed canonical fields per spec § 5.7 and change B (5 cell keys)
+        # Realistic mixed-case and irregularly spaced fields that normalize to the canonical baseline
         fields = {
-            "name": "Jane Doe",
-            "roll_number": "CS2026-001",
-            "register_number": "REG-987654",
-            "degree": "Bachelor of Technology in Computer Science",
+            "name": "  Jane   DOE ",
+            "roll_number": " CS2026-001 ",
+            "register_number": " REG-987654 ",
+            "degree": "  Bachelor   of Technology  in Computer Science ",
             "marks": [
                 {
-                    "subject_code": "CS101",
-                    "subject_name": "Data Structures",
-                    "marks_obtained": "88",
-                    "max_marks": "100",
-                    "grade": "A",
+                    "subject_code": " CS101 ",
+                    "subject_name": "  Data   Structures ",
+                    "marks_obtained": " 88 ",
+                    "max_marks": " 100 ",
+                    "grade": " A ",
                 },
                 {
-                    "subject_code": "CS102",
-                    "subject_name": "Algorithms",
+                    "subject_code": " cs102 ",
+                    "subject_name": " Algorithms ",
                     "marks_obtained": "92",
                     "max_marks": "100",
-                    "grade": "A+",
+                    "grade": " A+ ",
                 },
                 {
                     "subject_code": "CS103",
-                    "subject_name": "Operating Systems",
+                    "subject_name": " Operating   Systems ",
                     "marks_obtained": "85",
                     "max_marks": "100",
                     "grade": "A",

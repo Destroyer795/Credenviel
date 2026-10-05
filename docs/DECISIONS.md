@@ -44,6 +44,7 @@
 | D-027 | Canonical `fields_hash` normalization pipeline | PROPOSED | Normalization pipeline conforms to CONTRACTS §6: canonical keys (all 7: `name, roll_number, register_number, degree, marks_json, cgpa, issue_date`), null/empty/whitespace converted to `null`, string pipeline (NFC -> collapse `\s+` -> trim -> `lower()` -> NFC), numeric fields (`cgpa`, `marks_obtained`, `max_marks`) converted via `Decimal` to clean decimal strings without exponents or trailing zeros (`92.0` -> `"92"`, `-0` -> `"0"`), dates strictly validated as `YYYY-MM-DD`, marks rows use exactly 5 cell keys (`subject_code`, `subject_name`, `marks_obtained`, `max_marks`, `grade`) and are sorted by normalized `subject_code` (null first) breaking ties by canonical row string, serialized with sorted keys, `(',', ':')` separators, `ensure_ascii=False`, UTF-8 encoded into lowercase SHA-256 hex digest. Parity risk flagged between Python `lower()`/Unicode `\s` and Go `ToLower`/ASCII `\s`. |
 | D-028 | Confidence evaluation structure and single-cell thresholding | PROPOSED | Evaluates all top-level extracted fields and individual marks table cells against `CONFIDENCE_THRESHOLD` (default 0.85). Any single field or single marks table cell failing the threshold flags the document for human review (`needs_review`). Formats `confidence_json` with `{threshold, fields:{...}, marks:[{subject_code, cells:{...}}], below_threshold:[...]}`. |
 | D-029 | Worker error categorization and retry semantics | PROPOSED | Distinguishes `FatalError` (missing blob, 0-byte file, unsupported layout) which transitions job to `failed` with `failure_reason` and completes the message, from transient exceptions which abandon the message for redelivery. When delivery count exceeds maximum deliveries, the message is dead-lettered while the job remains in `processing` status until dead-letter processing or administrative sweeper acts. In unexpected state `awaiting_upload`, worker abandons the message. |
+| D-030 | Records table stores raw extracted fields; `fields_hash` computed from normalized copy | PROPOSED | Preserves high-fidelity OCR output including original casing, punctuation, and marks extraction order for human inspection and official record presentation. Normalization (whitespace collapsing, case-folding, subject-code sorting) is applied strictly to an in-memory copy used to compute `fields_hash`. Re-normalizing the stored record produces the identical `fields_hash`. |
 
 ## Open Questions (Phase 1)
 
@@ -57,6 +58,7 @@
 | Q-006 | Phase 2 packaging: the worker Docker build context must be the repo root to include `shared/`; the Function needs `shared/` vendored. | Phase 2 |
 | Q-007 | CONTRACTS says the internal endpoint is protected by "internal ingress"; ingress is configured per app, not per route, so the shared secret may be the only protection. | Phase 2/3 |
 | Q-008 | "Any single cell below threshold → review" may flag too many documents on large marksheets; treat the threshold as tunable. | Phase 4 |
+| Q-009 | Real OCR output may fail normalization (non-ISO date, non-numeric marks): route to `needs_review` rather than `failed` | Phase 4 |
 
 ---
 

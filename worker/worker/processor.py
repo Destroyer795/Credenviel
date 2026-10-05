@@ -154,9 +154,9 @@ class WorkerProcessor:
                 threshold=self.threshold,
             )
 
-            # Canonical normalization & fields_hash
-            canonical_fields = canonicalize_fields(extraction.fields)
-            fields_hash = compute_fields_hash(extraction.fields)
+            # Canonical normalization & fields_hash (normalization applies only to hash calculation)
+            raw_fields = extraction.fields
+            fields_hash = compute_fields_hash(raw_fields)
 
             # Hook before finalize
             if self.before_finalize:
@@ -177,7 +177,7 @@ class WorkerProcessor:
                         # Will roll back transaction and complete message below
                         final_status = "no_op"
                     else:
-                        # Upsert record (never overwrite public_verification_id or verified_by_issuer)
+                        # Upsert record with raw extracted values (never overwrite public_verification_id or verified_by_issuer)
                         cur.execute(
                             """
                             INSERT INTO records (
@@ -209,13 +209,13 @@ class WorkerProcessor:
                             """,
                             (
                                 job_id,
-                                canonical_fields["name"],
-                                canonical_fields["roll_number"],
-                                canonical_fields["register_number"],
-                                canonical_fields["degree"],
-                                Jsonb(canonical_fields["marks_json"]) if canonical_fields["marks_json"] is not None else None,
-                                canonical_fields["cgpa"],
-                                canonical_fields["issue_date"],
+                                raw_fields.get("name"),
+                                raw_fields.get("roll_number"),
+                                raw_fields.get("register_number"),
+                                raw_fields.get("degree"),
+                                Jsonb(raw_fields.get("marks")) if raw_fields.get("marks") is not None else None,
+                                raw_fields.get("cgpa"),
+                                raw_fields.get("issue_date"),
                                 Jsonb(confidence_json),
                                 source_hash,
                                 fields_hash,

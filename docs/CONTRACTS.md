@@ -243,6 +243,12 @@ The `fields_hash` is an immutable SHA-256 digest of the **canonical JSON** repre
 9. **Compact Serialization:** Serialize without formatting whitespace (`separators=(',', ':')` in Python, compact encoding in Go).
 10. **Digest:** Compute SHA-256 over the UTF-8 byte stream.
 
+### Extractor Contract & Storage vs Normalization Rule (Phase 1 addition — PROPOSED)
+
+- **Extractor Contract:** The document extraction engine must return `issue_date` formatted as an ISO date string (`YYYY-MM-DD`) and `cgpa` as a numeric decimal string (e.g. `"8.85"`), matching PostgreSQL `DATE` and `NUMERIC` column constraints. Text fields (`name`, `roll_number`, `register_number`, `degree`) and tabular marks cells may contain arbitrary casing and irregular spacing as captured from the source document.
+- **Raw Storage in `records`:** The `records` database table stores text fields (`name`, `roll_number`, `register_number`, `degree`, and `marks_json`) exactly as returned by the extractor, preserving original casing, whitespace, and extraction order for marks rows.
+- **Normalized Copy for Hashing:** Normalization (whitespace collapsing, case-folding, and marks table sorting by `subject_code`) applies strictly to an in-memory copy constructed exclusively for computing `fields_hash`. Recomputing `fields_hash` from the raw stored record fields by feeding them through the normalization algorithm yields the identical `fields_hash`.
+
 ---
 
 ## 7. Confidence Threshold & Tabular Marks Rule

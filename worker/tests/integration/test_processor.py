@@ -120,7 +120,8 @@ def test_happy_path_student(test_conn, test_store, test_queue):
         # Check records row
         cur.execute(
             """
-            SELECT public_verification_id, name, degree, source_hash, fields_hash,
+            SELECT public_verification_id, name, roll_number, register_number, degree,
+                   marks_json, cgpa, issue_date, source_hash, fields_hash,
                    verified_by_issuer, confidence_json
             FROM records
             WHERE job_id = %s
@@ -129,15 +130,38 @@ def test_happy_path_student(test_conn, test_store, test_queue):
         )
         rec = cur.fetchone()
         assert rec is not None
-        pub_id, name, degree, source_hash, fields_hash, verified_by_issuer, conf_json = rec
+        (
+            pub_id, name, roll_number, register_number, degree,
+            marks_json, cgpa, issue_date, source_hash, fields_hash,
+            verified_by_issuer, conf_json,
+        ) = rec
 
         assert pub_id is not None
-        assert name == "jane doe"
-        assert degree == "bachelor of technology in computer science"
+        # Stored records preserve the exact raw values from extractor
+        assert name == "  Jane   DOE "
+        assert roll_number == " CS2026-001 "
+        assert register_number == " REG-987654 "
+        assert degree == "  Bachelor   of Technology  in Computer Science "
         assert source_hash == hashlib.sha256(SAMPLE_PDF_BYTES).hexdigest()
         assert fields_hash == BASELINE_FIELDS_HASH
         assert verified_by_issuer is False
         assert conf_json["below_threshold"] == []
+
+        # Regression test: Rebuild fields dict from the STORED record row and recompute fields_hash
+        # Recomputed fields_hash must equal the stored fields_hash!
+        from credenviel_shared.normalizer import compute_fields_hash
+        rebuilt_fields = {
+            "name": name,
+            "roll_number": roll_number,
+            "register_number": register_number,
+            "degree": degree,
+            "marks": marks_json,
+            "cgpa": str(cgpa) if cgpa is not None else None,
+            "issue_date": str(issue_date) if issue_date is not None else None,
+        }
+        recomputed_hash = compute_fields_hash(rebuilt_fields)
+        assert recomputed_hash == fields_hash
+        assert recomputed_hash == BASELINE_FIELDS_HASH
 
 
 def test_happy_path_issuer(test_conn, test_store, test_queue):
