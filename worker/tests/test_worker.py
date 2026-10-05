@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+import pytest
 
 WORKER_DIR = Path(__file__).resolve().parent.parent
 
@@ -36,6 +37,7 @@ def test_worker_cli_help():
     assert "--stub-extractor" in result.stdout
 
 
+@pytest.mark.integration
 def test_worker_stub_extractor_flag():
     """Test that the worker runs and exits cleanly with --stub-extractor and --once."""
     result = subprocess.run(
