@@ -58,6 +58,9 @@ func getTestDSN() string {
 }
 
 func ensureTestDB(t *testing.T) {
+	if err := ValidateTestDBName(testDBName); err != nil {
+		t.Fatalf("%v", err)
+	}
 	initDBOnce.Do(func() {
 		ctx := context.Background()
 		maintPool, err := pgxpool.New(ctx, getMaintenanceDSN())
