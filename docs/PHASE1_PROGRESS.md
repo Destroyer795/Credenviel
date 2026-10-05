@@ -362,6 +362,67 @@ Demo completed successfully! End-to-end pipeline is operational.
 ======================================================================
 ```
 
+---
 
+## Phase 1 Review Fixes (`phase-1-fixes`)
 
+### Fix F1: Test Database Harness Isolation (`15f46e7`)
+- Moved `testdb.py` out of runtime package `shared/python/credenviel_shared/` to test harness directory `shared/python/tests/testdb.py`.
+- Updated all test fixtures in `shared/python/tests/conftest.py`, `functions/tests/integration/test_core.py`, and `worker/tests/integration/test_processor.py`.
+- Added `shared/python/tests/test_package_hygiene.py` asserting that `credenviel_shared` exports no administrative DB functions (`CREATE DATABASE`, `DROP DATABASE`, `TRUNCATE TABLE`) and that `credenviel_shared.testdb` raises `ModuleNotFoundError`.
 
+### Fix F2: Raw Storage & Normalized Hashing (`72b7577`)
+- `worker/worker/processor.py`: Modified `records` table upsert to store raw extracted fields (`name`, `roll_number`, `register_number`, `degree`, and `marks` in extraction order). Normalization is performed strictly on an in-memory copy for computing `fields_hash`.
+- `worker/worker/extractor.py`: Updated `StubExtractor` to return realistic mixed-case and irregularly spaced fields (e.g. `"  Jane   DOE "`, `" CS2026-001 "`, `"  Bachelor   of Technology  in Computer Science "`). Normalization guarantees the baseline `fields_hash` remains identical (`a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a`).
+- `worker/tests/integration/test_processor.py`: Verified that stored `records.name` preserves raw casing/whitespace while `fields_hash` is unchanged. Added regression test rebuilding fields dict from stored `records` row and recomputing `compute_fields_hash()` to prove identity.
+- `docs/CONTRACTS.md` § 6: Documented extractor contract requiring ISO `YYYY-MM-DD` date and numeric string `cgpa`, and documented the raw storage vs normalized hashing rule.
+- `docs/DECISIONS.md`: Logged D-030 (PROPOSED) and Q-009 (open question deferred to Phase 4).
+
+### Fix F3: Go Integration Test Database Guard (`6a79d7e`)
+- Extracted database name validation into `api/internal/server/db_guard.go` (`ValidateTestDBName`).
+- Added unit tests in `api/internal/server/db_guard_test.go` proving it rejects `"credenviel"`, `"postgres"`, `""`, `"   "`, `"surplus_db"`, and accepts `"credenviel_test"`.
+- Wired `ValidateTestDBName(testDBName)` into `ensureTestDB` in `api/internal/server/integration_test.go`.
+
+### Fix F4: Dev DB Investigation & Proposed Cleanup SQL
+
+#### Read-Only Investigation of `credenviel` (Port 5433)
+1. `pg_stat_user_tables`:
+   - `jobs`: `n_tup_ins: 1, n_tup_upd: 5, n_tup_del: 0` (4 rows present)
+   - `local_queue_messages`: `n_tup_ins: 1, n_tup_upd: 2, n_tup_del: 2` (0 rows present)
+   - `records`: `n_tup_ins: 2, n_tup_upd: 0, n_tup_del: 0` (3 rows present)
+   - `users`: `n_tup_ins: 0, n_tup_upd: 1, n_tup_del: 0` (1 row present)
+2. Sequence status:
+   - `SELECT last_value FROM local_queue_messages_id_seq;` -> `34`
+3. Sequence ID consumption explanation:
+   - Message ID 1 was used by initial demo run on 2026-10-03 (job `5b97282b...`).
+   - Message ID 2 was enqueued by demo run on 2026-10-03 (job `2a71d08c...`), which was left uncompleted when the demo worker process was interrupted.
+   - Message IDs 3 through 33: In PostgreSQL, sequence `nextval` is monotonic and not rolled back. IDs 3 to 33 were consumed either by transactions that rolled back, uncompleted/aborted runs of `simulate-upload`, or test/script iterations where sequence numbers advanced without surviving tuple commits.
+   - Message ID 34 was enqueued by the Commit 6 demo run on 2026-10-05 (job `ce271e5b...`). When the worker ran with `--once`, it consumed both pending message 2 and message 34, completing both.
+
+#### Proposed Cleanup SQL for Dev DB `credenviel` (For Human Review & Execution)
+```sql
+-- Proposal to clean up stray dev DB demo/orphan rows in 'credenviel'
+-- Run this manually against 'credenviel' on host port 5433:
+
+DELETE FROM records WHERE job_id IN (
+    '8623db6a-5f01-4439-9d7b-c05e5f1d5346',
+    '5b97282b-6d1c-42bb-9d17-76be83974df7',
+    '2a71d08c-0b29-441d-88ac-85cff7287d01',
+    'ce271e5b-12c0-41b1-badf-7689b0141f3f'
+);
+
+DELETE FROM jobs WHERE id IN (
+    '8623db6a-5f01-4439-9d7b-c05e5f1d5346',
+    '5b97282b-6d1c-42bb-9d17-76be83974df7',
+    '2a71d08c-0b29-441d-88ac-85cff7287d01',
+    'ce271e5b-12c0-41b1-badf-7689b0141f3f'
+);
+
+-- Reset sequence to 1 for clean subsequent demo runs:
+ALTER SEQUENCE local_queue_messages_id_seq RESTART WITH 1;
+```
+
+### Fix F6: Lock Expiry Determinism, Independent Vector Verification & Azurite Config
+- **Change E:** Replaced `time.sleep(1.2)` in `shared/python/tests/test_queue.py` (`test_lock_expiry_redelivers`) with direct DB-driven lock expiry (`UPDATE local_queue_messages SET locked_until = now() - interval '1 second'`).
+- **Change F:** Created `scripts/verify_vectors.py` which reads `shared/test-vectors/fields_hash.json` and invokes system `sha256sum` directly on temp files for every vector without importing `normalizer.py`. Updated `shared/test-vectors/README.md`.
+- **Extra:** Replaced `AccountKey` connection string in `.env.example` with `UseDevelopmentStorage=true` targeting local Azurite emulator.
