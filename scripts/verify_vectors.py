@@ -8,6 +8,7 @@ This script MUST NOT import the normalizer.
 """
 
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -19,16 +20,28 @@ VECTORS_FILE = REPO_ROOT / "shared" / "test-vectors" / "fields_hash.json"
 
 
 def find_sha256sum() -> str:
+    # 1. Look up sha256sum on system PATH first (Linux/macOS or Windows with coreutils on PATH)
     binary = shutil.which("sha256sum")
     if binary:
         return binary
 
-    # Common Windows Git coreutils path
-    git_bin = Path(r"C:\Program Files\Git\usr\bin\sha256sum.exe")
-    if git_bin.exists():
-        return str(git_bin)
+    # 2. Derive from git.exe on PATH (handles any custom drive, Scoop, or custom install folder)
+    git_exe = shutil.which("git")
+    if git_exe:
+        derived = Path(git_exe).resolve().parent.parent / "usr" / "bin" / "sha256sum.exe"
+        if derived.exists():
+            return str(derived)
 
-    raise FileNotFoundError("Could not find system 'sha256sum' executable on PATH or in Git usr/bin")
+    # 3. Fall back to Git usr/bin candidate paths on Windows via environment variables
+    for env_var in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+        base = os.environ.get(env_var)
+        if base:
+            for sub in (Path("Git") / "usr" / "bin" / "sha256sum.exe", Path("Programs") / "Git" / "usr" / "bin" / "sha256sum.exe"):
+                candidate = Path(base) / sub
+                if candidate.exists():
+                    return str(candidate)
+
+    raise FileNotFoundError("Could not find system 'sha256sum' executable on PATH or in Git installation")
 
 
 def main() -> int:

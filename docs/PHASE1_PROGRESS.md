@@ -426,3 +426,128 @@ ALTER SEQUENCE local_queue_messages_id_seq RESTART WITH 1;
 - **Change E:** Replaced `time.sleep(1.2)` in `shared/python/tests/test_queue.py` (`test_lock_expiry_redelivers`) with direct DB-driven lock expiry (`UPDATE local_queue_messages SET locked_until = now() - interval '1 second'`).
 - **Change F:** Created `scripts/verify_vectors.py` which reads `shared/test-vectors/fields_hash.json` and invokes system `sha256sum` directly on temp files for every vector without importing `normalizer.py`. Updated `shared/test-vectors/README.md`.
 - **Extra:** Replaced `AccountKey` connection string in `.env.example` with `UseDevelopmentStorage=true` targeting local Azurite emulator.
+
+### Raw Verification Evidence (Part 3)
+
+#### Vector Independent Verification (`python scripts/verify_vectors.py`)
+```
+Using sha256sum binary: C:\Program Files\Git\usr\bin\sha256sum.exe
+Loading vectors from:   C:\Users\PRANAV KISHAN\Desktop\forked trash\Credenviel\shared\test-vectors\fields_hash.json
+
+[01/13] PASS case_01_baseline_stub
+         Expected: a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a
+         Computed: a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a
+[02/13] PASS case_02_shuffled_keys
+         Expected: a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a
+         Computed: a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a
+[03/13] PASS case_03_extra_whitespace
+         Expected: 06029496e8c87ec143a685e81f0efee9a5f41e64d8a70c03a9b1137ad3e3ed65
+         Computed: 06029496e8c87ec143a685e81f0efee9a5f41e64d8a70c03a9b1137ad3e3ed65
+[04/13] PASS case_04_nfd_normalization
+         Expected: ba755a4b0b621affdfe83a4b50b213bebb597aeb086b4f65f50ce3a74032a14d
+         Computed: ba755a4b0b621affdfe83a4b50b213bebb597aeb086b4f65f50ce3a74032a14d
+[05/13] PASS case_05_casing
+         Expected: 95aed3aa48fc71169d0dc2001dcf6655b8810010a80cb89bcc39833c01d3a4ec
+         Computed: 95aed3aa48fc71169d0dc2001dcf6655b8810010a80cb89bcc39833c01d3a4ec
+[06/13] PASS case_06_numeric_decimals
+         Expected: 8fe82d0ea26a7cabe1062ac5f44bc13241424201e2856081017caf10ba503781
+         Computed: 8fe82d0ea26a7cabe1062ac5f44bc13241424201e2856081017caf10ba503781
+[07/13] PASS case_07_missing_and_null_fields
+         Expected: 97070631dcaaa7870fbb1a7205fdf9ac328a04e84f3002d25659d14ced99d67a
+         Computed: 97070631dcaaa7870fbb1a7205fdf9ac328a04e84f3002d25659d14ced99d67a
+[08/13] PASS case_08_reordered_marks_rows
+         Expected: 61af5238235f8029a9214a3fd9ec1db23b598fe530403881cb7f82f3425989e9
+         Computed: 61af5238235f8029a9214a3fd9ec1db23b598fe530403881cb7f82f3425989e9
+[09/13] PASS case_09_empty_marks
+         Expected: 84e3849c03270d2adfcec8f57aaf5b566852e915d2895f9a33b5a675dc872d73
+         Computed: 84e3849c03270d2adfcec8f57aaf5b566852e915d2895f9a33b5a675dc872d73
+[10/13] PASS case_10_tamil_name
+         Expected: 6a6cb3078045d30f54a588147241f027a62246e1080e84f13820847989c3bc4a
+         Computed: 6a6cb3078045d30f54a588147241f027a62246e1080e84f13820847989c3bc4a
+[11/13] PASS case_11_parity_turkish_i
+         Expected: 37cee16f34c648796efc3172d8acf8d2c83b7c42f10f453de651e2b568e666b4
+         Computed: 37cee16f34c648796efc3172d8acf8d2c83b7c42f10f453de651e2b568e666b4
+[12/13] PASS case_12_parity_greek_sigma
+         Expected: 8a7ae8e3e957f16485aff4de76543d696b8b6b663d63469e2540d7e77ac1a672
+         Computed: 8a7ae8e3e957f16485aff4de76543d696b8b6b663d63469e2540d7e77ac1a672
+[13/13] PASS case_13_parity_unicode_spaces
+         Expected: f6c31fdce1368e3f5874a77be09e723848851ca3c2ac8edaac7c12f102538d10
+         Computed: f6c31fdce1368e3f5874a77be09e723848851ca3c2ac8edaac7c12f102538d10
+
+All 13 test vectors verified independently with system sha256sum!
+```
+
+#### Demo Output (`make demo`)
+```
+======================================================================
+Credenviel Phase 1 Local Skeleton Demo
+======================================================================
+[*] Configuration:
+    - Database URL: postgres://credenviel:localdev@localhost:5433/credenviel?sslmode=disable
+    - API Port: 8080
+    - Internal API Key: 20c1b820... (redacted)
+    - Local Storage Root: C:\Users\PRANAV KISHAN\Desktop\forked trash\Credenviel\.local-storage
+    - Demo PDF Size: 477 bytes
+
+[1/6] Starting Go API server...
+    API is healthy and listening.
+
+[2/6] Creating job via POST /api/v1/jobs...
+    Job created successfully:
+    - Job ID:   5c8b9aba-05d5-434e-b7d8-cd5cf7b0304d
+    - Blob Key: raw-uploads/5c8b9aba-05d5-434e-b7d8-cd5cf7b0304d/degree_certificate.pdf
+    - Dev Upload URL: http://localhost:8080/dev/upload/5c8b9aba-05d5-434e-b7d8-cd5cf7b0304d/degree_certificate.pdf
+
+[3/6] Uploading PDF via PUT dev upload endpoint...
+    Uploaded 477 bytes to local store.
+
+[4/6] Running simulate-upload (Function stand-in)...
+    simulate-upload output:
+      Firing blob_created event for 'raw-uploads/5c8b9aba-05d5-434e-b7d8-cd5cf7b0304d/degree_certificate.pdf'...
+      Result: action=queued, job_id=5c8b9aba-05d5-434e-b7d8-cd5cf7b0304d, reason=None
+
+[5/6] Running Python worker with --once --stub-extractor...
+    worker output:
+      2026-10-05 16:26:47,978 INFO worker: Running with STUB extractor (load-test mode)
+      2026-10-05 16:26:47,978 INFO worker: Stub extractor profile: high
+      2026-10-05 16:26:47,997 INFO worker: Worker started, polling queue 'job-processing'...
+      2026-10-05 16:26:50,074 INFO worker: Processed message 35: outcome=processed
+      2026-10-05 16:26:50,076 INFO worker: Queue empty and --once flag set; exiting.
+      2026-10-05 16:26:50,076 INFO worker: Worker stopped.
+
+[6/6] Pipeline Results from PostgreSQL:
+----------------------------------------------------------------------
+>> jobs row:
+-[ RECORD 1 ]------+------------------------------------------------------------------------
+id                 | 5c8b9aba-05d5-434e-b7d8-cd5cf7b0304d
+status             | processed
+failure_reason     | 
+uploader_is_issuer | f
+blob_key           | raw-uploads/5c8b9aba-05d5-434e-b7d8-cd5cf7b0304d/degree_certificate.pdf
+created_at         | 2026-10-05 10:56:45.279212+00
+updated_at         | 2026-10-05 10:56:48.0227+00
+
+>> records row:
+-[ RECORD 1 ]----------+-----------------------------------------------------------------
+id                     | a848d16a-0f91-4960-b65f-ce47a52a70a5
+job_id                 | 5c8b9aba-05d5-434e-b7d8-cd5cf7b0304d
+public_verification_id | 6fe311b2-a3fa-4402-bf58-652614868473
+name                   |   Jane   DOE 
+roll_number            |  CS2026-001 
+degree                 |   Bachelor   of Technology  in Computer Science 
+cgpa                   | 8.85
+issue_date             | 2026-05-15
+source_hash            | 4c06f68bff19cc9d624f1b110d8e5a20bf633cf6a8097e5fec407b756168f253
+fields_hash            | a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a
+verified_by_issuer     | f
+```
+
+#### Independent `sha256sum` Comparison
+```bash
+sha256sum ".local-storage/raw-uploads/5c8b9aba-05d5-434e-b7d8-cd5cf7b0304d/degree_certificate.pdf"
+# Output: 4c06f68bff19cc9d624f1b110d8e5a20bf633cf6a8097e5fec407b756168f253
+```
+- Uploaded file SHA-256: `4c06f68bff19cc9d624f1b110d8e5a20bf633cf6a8097e5fec407b756168f253`
+- Database `records.source_hash`: `4c06f68bff19cc9d624f1b110d8e5a20bf633cf6a8097e5fec407b756168f253`
+- Verification: Bit-for-bit identical. Raw fields (`name='  Jane   DOE '`, `degree='   Bachelor   of Technology  in Computer Science '`) preserved in PostgreSQL with canonical `fields_hash` matching baseline hash.
+
