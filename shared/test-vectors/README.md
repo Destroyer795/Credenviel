@@ -14,10 +14,16 @@ Follows `docs/CONTRACTS.md` § 6 and `docs/PHASE1_SPEC.md` § 5.8:
 
 ## Independent Hash Verification (Change F)
 
-Each `expected_hash` in `fields_hash.json` was verified independently using Git's GNU `sha256sum` utility directly against the byte stream:
+Each `expected_hash` in `fields_hash.json` is verified independently using the system GNU `sha256sum` utility directly against the raw UTF-8 canonical byte stream without importing or invoking the Python normalizer.
 
+An automated independent verification script is provided at `scripts/verify_vectors.py`:
 ```bash
-# Example for Case 1 (Baseline):
+python scripts/verify_vectors.py
+```
+This script iterates through all 13 test vectors in `fields_hash.json`, writes each canonical JSON string's UTF-8 bytes to an isolated temporary file, invokes the system `sha256sum` binary, and confirms the output matches `expected_hash` exactly.
+
+Example manual command:
+```bash
 printf '%s' '{"name":"jane doe","roll_number":"cs2026-001","register_number":"reg-987654","degree":"bachelor of technology in computer science","marks_json":[{"subject_code":"cs101","subject_name":"data structures","marks_obtained":"88","max_marks":"100","grade":"a"},{"subject_code":"cs102","subject_name":"algorithms","marks_obtained":"92","max_marks":"100","grade":"a+"},{"subject_code":"cs103","subject_name":"operating systems","marks_obtained":"85","max_marks":"100","grade":"a"}],"cgpa":"8.85","issue_date":"2026-05-15"}' > case01.txt
 sha256sum case01.txt
 # Output: a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a *case01.txt

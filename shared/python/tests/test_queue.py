@@ -147,8 +147,11 @@ def test_lock_expiry_redelivers(queue_conn):
     # While locked, receive returns None
     assert q.receive() is None
 
-    # Wait for lock to expire
-    time.sleep(1.2)
+    # Force lock expiry directly in DB (Change E: DB-driven expiry instead of sleep)
+    queue_conn.execute(
+        "UPDATE local_queue_messages SET locked_until = now() - interval '1 second' WHERE id = %s",
+        (msg.id,),
+    )
 
     # Now can be received again
     msg2 = q.receive(lock_duration_seconds=30)
