@@ -278,5 +278,90 @@ worker/tests/test_worker.py::test_worker_fails_without_stub_extractor PASSED [10
 ============================= 25 passed in 4.83s ==============================
 ```
 
+---
+
+## Commit 6: tooling, docs: run/test/demo targets, README quick start, build plan
+
+- **Files:**
+  - `Makefile` (added setup, run-api, run-worker, simulate-upload, test, test-integration, demo targets)
+  - `scripts/demo.py` (cross-platform end-to-end demo script)
+  - `.env.example` (Phase 1 configuration: APP_ENV, AUTH_MODE, INTERNAL_API_KEY, LOCAL_STORAGE_ROOT, etc.)
+  - `README.md` (Quick Start for Phase 1 local development and testing)
+  - `docs/BUILD_PLAN.md` (Updated Phase 1 status to DONE with all 18 passing acceptance tests)
+  - `docs/DECISIONS.md` (Recorded open questions Q-001 through Q-008 and decisions D-027 through D-029)
+  - `docs/PHASE1_PROGRESS.md`
+
+### Test Output: End-to-End Demo (Acceptance Test 18)
+
+```
+======================================================================
+Credenviel Phase 1 Local Skeleton Demo
+======================================================================
+[*] Configuration:
+    - Database URL: postgres://credenviel:localdev@localhost:5433/credenviel?sslmode=disable
+    - API Port: 8080
+    - Internal API Key: 598d6ece... (redacted)
+    - Local Storage Root: C:\Users\PRANAV KISHAN\Desktop\forked trash\Credenviel\.local-storage
+    - Demo PDF Size: 477 bytes
+
+[1/6] Starting Go API server...
+    API is healthy and listening.
+
+[2/6] Creating job via POST /api/v1/jobs...
+    Job created successfully:
+    - Job ID:   ce271e5b-12c0-41b1-badf-7689b0141f3f
+    - Blob Key: raw-uploads/ce271e5b-12c0-41b1-badf-7689b0141f3f/degree_certificate.pdf
+    - Dev Upload URL: http://localhost:8080/dev/upload/ce271e5b-12c0-41b1-badf-7689b0141f3f/degree_certificate.pdf
+
+[3/6] Uploading PDF via PUT dev upload endpoint...
+    Uploaded 477 bytes to local store.
+
+[4/6] Running simulate-upload (Function stand-in)...
+    simulate-upload output:
+      Firing blob_created event for 'raw-uploads/ce271e5b-12c0-41b1-badf-7689b0141f3f/degree_certificate.pdf'...
+      Result: action=queued, job_id=ce271e5b-12c0-41b1-badf-7689b0141f3f, reason=None
+
+[5/6] Running Python worker with --once --stub-extractor...
+    worker output:
+      2026-10-05 11:03:58,498 INFO worker: Running with STUB extractor (load-test mode)
+      2026-10-05 11:03:58,498 INFO worker: Stub extractor profile: high
+      2026-10-05 11:03:58,520 INFO worker: Worker started, polling queue 'job-processing'...
+      2026-10-05 11:04:00,631 INFO worker: Processed message 2: outcome=processed
+      2026-10-05 11:04:02,723 INFO worker: Processed message 34: outcome=processed
+      2026-10-05 11:04:02,726 INFO worker: Queue empty and --once flag set; exiting.
+      2026-10-05 11:04:02,726 INFO worker: Worker stopped.
+
+[6/6] Pipeline Results from PostgreSQL:
+----------------------------------------------------------------------
+>> jobs row:
+-[ RECORD 1 ]------+------------------------------------------------------------------------
+id                 | ce271e5b-12c0-41b1-badf-7689b0141f3f
+status             | processed
+failure_reason     | 
+uploader_is_issuer | f
+blob_key           | raw-uploads/ce271e5b-12c0-41b1-badf-7689b0141f3f/degree_certificate.pdf
+created_at         | 2026-10-05 05:33:55.294383+00
+updated_at         | 2026-10-05 05:34:00.643352+00
+
+>> records row:
+-[ RECORD 1 ]----------+-----------------------------------------------------------------
+id                     | 23943105-2f3c-44af-bcff-13c32ee968ed
+job_id                 | ce271e5b-12c0-41b1-badf-7689b0141f3f
+public_verification_id | 3cd0b4a1-167a-4df0-a531-94ddac73c9f7
+name                   | jane doe
+roll_number            | cs2026-001
+degree                 | bachelor of technology in computer science
+cgpa                   | 8.85
+issue_date             | 2026-05-15
+source_hash            | 4c06f68bff19cc9d624f1b110d8e5a20bf633cf6a8097e5fec407b756168f253
+fields_hash            | a9c10c881a985266fc9d382a237e670d87560a0ca508b0de650032208284b04a
+verified_by_issuer     | f
+
+======================================================================
+Demo completed successfully! End-to-end pipeline is operational.
+======================================================================
+```
+
+
 
 
