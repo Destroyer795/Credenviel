@@ -36,6 +36,17 @@ Only `job_id` is sent. The worker looks up all job metadata (`blob_key`, `upload
    - An Azure Monitor alert fires on any message entering the DLQ (`ActiveMessages > 0` on DLQ entity).
    - A dedicated DLQ-trigger Azure Function reads the dead-lettered message, ensures `jobs.status` is set to `'failed'` in PostgreSQL, logs diagnostic error telemetry, and marks the job for administrator audit.
 
+### Local Queue Peek-Lock Semantics (Phase 1 addition — PROPOSED)
+
+In local development and Phase 1 testing, Service Bus is simulated via PostgreSQL table `local_queue_messages` with peek-lock semantics matching Azure Service Bus:
+- **`receive(lock_duration_seconds=60)`**: Claims 1 message using `FOR UPDATE SKIP LOCKED`, ordered FIFO by `(enqueued_at, id)`. Only rows where `dead_lettered_at IS NULL`, `available_at <= now()`, and `(locked_until IS NULL OR locked_until < now())` are eligible.
+  - If the claimed message already has `delivery_count >= MAX_DELIVERY (5)`, it is immediately dead-lettered with `dead_letter_reason = 'MaxDeliveryCountExceeded'`, and `receive` continues to the next eligible message.
+  - Otherwise, increments `delivery_count`, sets `locked_until = now() + lock_duration`, and generates a fresh `lock_token UUID`.
+- **`complete(message)`**: Deletes the row from `local_queue_messages`. Requires matching `lock_token` and `locked_until >= now()`, else raises `LockLostError`.
+- **`abandon(message)`**: Clears the lock (`locked_until = NULL`, `lock_token = NULL`, `available_at = now()`) making the message available immediately for redelivery. Requires matching `lock_token` and `locked_until >= now()`, else raises `LockLostError`.
+- **`dead_letter(message, reason)`**: Sets `dead_lettered_at = now()` and `dead_letter_reason`, clearing locks. Requires matching `lock_token` and `locked_until >= now()`, else raises `LockLostError`.
+- **Lock expiration**: If a consumer crashes without completing or abandoning, the lock expires when `now() > locked_until`. The message automatically becomes visible again for subsequent `receive()` calls.
+
 ---
 
 ## 2. Blob Container Names & Path Format
@@ -51,8 +62,9 @@ Only `job_id` is sent. The worker looks up all job metadata (`blob_key`, `upload
 
 - **Raw uploads:**
   ```
-  raw-uploads/{job_id}/{original_filename}
+  raw-uploads/{job_id}/{sanitized_filename}
   ```
+  *(Phase 1 contract change: uses `{sanitized_filename}` instead of `{original_filename}` to neutralize path traversal and disallowed characters).*
   The `job_id` is embedded in the blob path so the Azure Function extracts it directly from the Event Grid subject URL without performing a preliminary database query.
 
 - **QR-Stamped certificates:**
@@ -89,6 +101,18 @@ stateDiagram-v2
 - **Issuer Actions:** The **Go API** updates `jobs.status` and `records` when an issuer resolves a review (`needs_review → processed`) or rejects a submission (`needs_review → failed`).
 - **Cleanup Actions:** The **Azure Function App** updates `jobs.status = 'failed'` for abandoned uploads after SAS expiry or for exhausted DLQ messages.
 
+### Database-Enforced Transition Guard (Phase 1 addition)
+
+A `BEFORE UPDATE OF status` trigger (`trg_jobs_status_guard`) enforces exactly the allowed transitions listed in the state diagram above, **minus** `needs_review → failed` (issuer rejection semantics deferred to Phase 4). Same-status updates are treated as no-ops and pass through. Any disallowed transition raises a `check_violation` error naming both statuses.
+
+Additionally, a `BEFORE INSERT` trigger (`trg_jobs_insert_guard`) ensures all new `jobs` rows start with status `awaiting_upload`. Test fixtures must reach other statuses through valid transitions.
+
+**Phase 1 note:** The Function stand-in also writes `failed` for invalid files (bad magic bytes, oversize) — a new writer path not in the original contract's Writing Authority list. This is recorded as a known deviation.
+
+### Function Idempotency Rule (Phase 1 addition — PROPOSED)
+
+Retrying a blob-created event on an already `queued` job re-sends the queue message and completes without error. The worker deduplicates redelivered or concurrent duplicate messages atomically via transactional locking (`SELECT FOR UPDATE`), treating redeliveries after completion as safe no-ops.
+
 ---
 
 ## 4. User Provisioning (JIT via Entra ID)
@@ -110,6 +134,16 @@ Because `jobs.uploader_id` enforces a foreign key constraint referencing `users(
    RETURNING id;
    ```
 3. The resulting `users.id` UUID is injected into the request context as the caller's `user_id` and used as `uploader_id` for all job creation queries.
+
+### Dev Authentication Contract (Phase 1 addition — PROPOSED)
+
+When running in local dev mode (`AUTH_MODE=dev` AND `APP_ENV=local`), Entra ID JWTs are replaced with HTTP headers:
+- `X-Dev-User`: Simulated Entra ID (object ID or subject). Required.
+- `X-Dev-Role`: Simulated user role (`issuer` or `student`). Required.
+- `X-Dev-Name`: Simulated display name. Required.
+
+Any missing or empty header, or any role other than `issuer` or `student`, returns `401 Unauthorized`.
+The JIT user provisioning executes identically using these claims.
 
 ---
 
@@ -154,6 +188,27 @@ Because `jobs.uploader_id` enforces a foreign key constraint referencing `users(
 |---|---|---|
 | `POST` | `/internal/v1/jobs/:id/notify` | Worker notifies API of status change (`processed`, `needs_review`, `failed`) to trigger SignalR broadcast |
 
+### Dev Endpoints (Phase 1 addition — active only when AUTH_MODE=dev)
+
+| Method | Path | Description |
+|---|---|---|
+| `PUT` | `/dev/upload/:jobId/:file` | Direct upload simulation endpoint (no auth headers required, mimics SAS URL). Enforces size cap and requires job in `awaiting_upload`. |
+
+### POST /api/v1/jobs Response Contract (Phase 1 update — PROPOSED)
+
+Status: `201 Created`
+```json
+{
+  "job_id": "<uuid>",
+  "blob_key": "raw-uploads/<uuid>/<sanitized_filename>",
+  "upload": {
+    "method": "PUT",
+    "url": "http://127.0.0.1:8080/dev/upload/<uuid>/<sanitized_filename>",
+    "expires_at": "2026-10-04T03:00:00Z"
+  }
+}
+```
+
 ### Authentication & Authorization Rules
 
 | Group | Authentication | Details |
@@ -187,6 +242,12 @@ The `fields_hash` is an immutable SHA-256 digest of the **canonical JSON** repre
 8. **Key Sorting:** Sort all dictionary/object keys alphabetically at all nesting levels.
 9. **Compact Serialization:** Serialize without formatting whitespace (`separators=(',', ':')` in Python, compact encoding in Go).
 10. **Digest:** Compute SHA-256 over the UTF-8 byte stream.
+
+### Extractor Contract & Storage vs Normalization Rule (Phase 1 addition — PROPOSED)
+
+- **Extractor Contract:** The document extraction engine must return `issue_date` formatted as an ISO date string (`YYYY-MM-DD`) and `cgpa` as a numeric decimal string (e.g. `"8.85"`), matching PostgreSQL `DATE` and `NUMERIC` column constraints. Text fields (`name`, `roll_number`, `register_number`, `degree`) and tabular marks cells may contain arbitrary casing and irregular spacing as captured from the source document.
+- **Raw Storage in `records`:** The `records` database table stores text fields (`name`, `roll_number`, `register_number`, `degree`, and `marks_json`) exactly as returned by the extractor, preserving original casing, whitespace, and extraction order for marks rows.
+- **Normalized Copy for Hashing:** Normalization (whitespace collapsing, case-folding, and marks table sorting by `subject_code`) applies strictly to an in-memory copy constructed exclusively for computing `fields_hash`. Recomputing `fields_hash` from the raw stored record fields by feeding them through the normalization algorithm yields the identical `fields_hash`.
 
 ---
 

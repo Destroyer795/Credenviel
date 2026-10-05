@@ -1,7 +1,9 @@
-"""Worker smoke tests."""
-
+import os
 import subprocess
 import sys
+from pathlib import Path
+
+WORKER_DIR = Path(__file__).resolve().parent.parent
 
 
 def test_worker_imports():
@@ -26,6 +28,7 @@ def test_worker_cli_help():
     """Test that the worker CLI --help works."""
     result = subprocess.run(
         [sys.executable, "-m", "worker", "--help"],
+        cwd=str(WORKER_DIR),
         capture_output=True,
         text=True,
     )
@@ -34,11 +37,25 @@ def test_worker_cli_help():
 
 
 def test_worker_stub_extractor_flag():
-    """Test that the worker runs and exits cleanly with --stub-extractor."""
+    """Test that the worker runs and exits cleanly with --stub-extractor and --once."""
     result = subprocess.run(
-        [sys.executable, "-m", "worker", "--stub-extractor"],
+        [sys.executable, "-m", "worker", "--stub-extractor", "--once"],
+        cwd=str(WORKER_DIR),
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0
     assert "STUB extractor" in result.stderr
+
+
+def test_worker_fails_without_stub_extractor():
+    """Test that the worker exits with code 2 if --stub-extractor is missing."""
+    result = subprocess.run(
+        [sys.executable, "-m", "worker"],
+        cwd=str(WORKER_DIR),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+
+

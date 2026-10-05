@@ -1,37 +1,62 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strconv"
+)
 
 // Config holds application configuration loaded from environment variables.
 type Config struct {
-	Port        string
-	DatabaseURL string
-	BlobURL     string
-	QueueURL    string
-	SignalRURL  string
-	KeyVaultURL string
-	// AuthBypass disables JWT checking for local development.
-	AuthBypass bool
-	// ConfidenceThreshold is the minimum confidence score before flagging needs_review.
+	Host                string
+	Port                string
+	AppEnv              string
+	AuthMode            string
+	DatabaseURL         string
+	BlobURL             string
+	QueueURL            string
+	SignalRURL          string
+	KeyVaultURL         string
+	InternalAPIKey      string
+	MaxUploadBytes      int64
+	PublicBaseURL       string
+	LocalStorageRoot    string
 	ConfidenceThreshold string
 }
 
-// Load reads configuration from environment variables with sensible defaults.
-func Load() *Config {
+// Load reads configuration using the provided environment lookup function.
+func LoadWith(getenv func(string) string) *Config {
+	maxUpload := int64(4194304) // 4MB default
+	if val := getenv("MAX_UPLOAD_BYTES"); val != "" {
+		if parsed, err := strconv.ParseInt(val, 10, 64); err == nil && parsed > 0 {
+			maxUpload = parsed
+		}
+	}
+
 	return &Config{
-		Port:                getEnv("PORT", "8080"),
-		DatabaseURL:         getEnv("DATABASE_URL", ""),
-		BlobURL:             getEnv("BLOB_URL", ""),
-		QueueURL:            getEnv("QUEUE_URL", ""),
-		SignalRURL:          getEnv("SIGNALR_URL", ""),
-		KeyVaultURL:         getEnv("KEY_VAULT_URL", ""),
-		AuthBypass:          getEnv("AUTH_BYPASS", "false") == "true",
-		ConfidenceThreshold: getEnv("CONFIDENCE_THRESHOLD", "0.85"),
+		Host:                getVal(getenv, "HOST", "127.0.0.1"),
+		Port:                getVal(getenv, "PORT", "8080"),
+		AppEnv:              getVal(getenv, "APP_ENV", "local"),
+		AuthMode:            getVal(getenv, "AUTH_MODE", "dev"),
+		DatabaseURL:         getVal(getenv, "DATABASE_URL", "postgres://credenviel:localdev@127.0.0.1:5433/credenviel?sslmode=disable"),
+		BlobURL:             getVal(getenv, "BLOB_URL", "http://127.0.0.1:10000/devstoreaccount1"),
+		QueueURL:            getVal(getenv, "QUEUE_URL", ""),
+		SignalRURL:          getVal(getenv, "SIGNALR_URL", ""),
+		KeyVaultURL:         getVal(getenv, "KEY_VAULT_URL", ""),
+		InternalAPIKey:      getVal(getenv, "INTERNAL_API_KEY", ""),
+		MaxUploadBytes:      maxUpload,
+		PublicBaseURL:       getVal(getenv, "PUBLIC_BASE_URL", "http://127.0.0.1:8080"),
+		LocalStorageRoot:    getVal(getenv, "LOCAL_STORAGE_ROOT", ".local-storage"),
+		ConfidenceThreshold: getVal(getenv, "CONFIDENCE_THRESHOLD", "0.85"),
 	}
 }
 
-func getEnv(key, fallback string) string {
-	if val, ok := os.LookupEnv(key); ok {
+// Load reads configuration from os.Getenv.
+func Load() *Config {
+	return LoadWith(os.Getenv)
+}
+
+func getVal(getenv func(string) string, key, fallback string) string {
+	if val := getenv(key); val != "" {
 		return val
 	}
 	return fallback

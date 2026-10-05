@@ -31,9 +31,34 @@
 
 ---
 
-## Open Decisions
+## Proposed (Phase 1)
 
-*None. All architecture and contract decisions are fully resolved and active.*
+| # | Decision | Status | Rationale |
+|---|---|---|---|
+| D-021 | Add `jobs.failure_reason TEXT` column | PROPOSED | Allows the Function stand-in and worker to record why a job failed (bad magic bytes, oversize, extraction error). Without this, operators cannot diagnose failures without reading logs. |
+| D-022 | Database-enforced status transition guard (`trg_jobs_status_guard`) | PROPOSED | Enforces the allowed transition set at the database level, preventing any buggy service from corrupting job state. Same-status updates pass as no-ops. `needs_review → failed` is excluded pending Phase 4 issuer rejection semantics. |
+| D-023 | Database-enforced insert guard (`trg_jobs_insert_guard`) | PROPOSED | New jobs must start as `awaiting_upload`. Prevents test fixtures or buggy code from inserting jobs in arbitrary states. |
+| D-024 | Function stand-in as `failed` writer for invalid files | PROPOSED | The Function stand-in writes `failed` with `failure_reason` for bad magic bytes, oversize, and extension mismatch. This is a new writer path not in the original CONTRACTS §3 Writing Authority list. |
+| D-025 | Amend D-007: PostgreSQL-backed local queue (`local_queue_messages`) | PROPOSED | D-007 proposed an in-memory fake queue. However, the Go API, Python worker, and Function stand-in run as independent processes that cannot share in-memory state. A PostgreSQL table `local_queue_messages` with peek-lock semantics (`FOR UPDATE SKIP LOCKED`, `locked_until`, `lock_token`, `delivery_count`, and `dead_lettered_at`) faithfully simulates Service Bus across processes without external dependencies. |
+| D-026 | Student job lookup scoping returns 404 for unauthorized access | PROPOSED | When a student attempts to query a job belonging to another student (or a malformed/non-existent ID), the API returns `404 Not Found` rather than `403 Forbidden`. This prevents unauthorized callers from probing and enumerating valid job IDs. |
+| D-027 | Canonical `fields_hash` normalization pipeline | PROPOSED | Normalization pipeline conforms to CONTRACTS §6: canonical keys (all 7: `name, roll_number, register_number, degree, marks_json, cgpa, issue_date`), null/empty/whitespace converted to `null`, string pipeline (NFC -> collapse `\s+` -> trim -> `lower()` -> NFC), numeric fields (`cgpa`, `marks_obtained`, `max_marks`) converted via `Decimal` to clean decimal strings without exponents or trailing zeros (`92.0` -> `"92"`, `-0` -> `"0"`), dates strictly validated as `YYYY-MM-DD`, marks rows use exactly 5 cell keys (`subject_code`, `subject_name`, `marks_obtained`, `max_marks`, `grade`) and are sorted by normalized `subject_code` (null first) breaking ties by canonical row string, serialized with sorted keys, `(',', ':')` separators, `ensure_ascii=False`, UTF-8 encoded into lowercase SHA-256 hex digest. Parity risk flagged between Python `lower()`/Unicode `\s` and Go `ToLower`/ASCII `\s`. |
+| D-028 | Confidence evaluation structure and single-cell thresholding | PROPOSED | Evaluates all top-level extracted fields and individual marks table cells against `CONFIDENCE_THRESHOLD` (default 0.85). Any single field or single marks table cell failing the threshold flags the document for human review (`needs_review`). Formats `confidence_json` with `{threshold, fields:{...}, marks:[{subject_code, cells:{...}}], below_threshold:[...]}`. |
+| D-029 | Worker error categorization and retry semantics | PROPOSED | Distinguishes `FatalError` (missing blob, 0-byte file, unsupported layout) which transitions job to `failed` with `failure_reason` and completes the message, from transient exceptions which abandon the message for redelivery. When delivery count exceeds maximum deliveries, the message is dead-lettered while the job remains in `processing` status until dead-letter processing or administrative sweeper acts. In unexpected state `awaiting_upload`, worker abandons the message. |
+| D-030 | Records table stores raw extracted fields; `fields_hash` computed from normalized copy | PROPOSED | Preserves high-fidelity OCR output including original casing, punctuation, and marks extraction order for human inspection and official record presentation. Normalization (whitespace collapsing, case-folding, subject-code sorting) is applied strictly to an in-memory copy used to compute `fields_hash`. Re-normalizing the stored record produces the identical `fields_hash`. |
+
+## Open Questions (Phase 1)
+
+| # | Question | Deferred to |
+|---|---|---|
+| Q-001 | Issuer rejection semantics (`needs_review → failed`, `processed → failed`): who writes, what audit trail? | Phase 4 |
+| Q-002 | Who recomputes `fields_hash` after an issuer correction: DESIGN says the worker, CONTRACTS §3 says the Go API. | Before Phase 4 |
+| Q-003 | Go/Python normalization parity (`lower()` vs `ToLower`, Unicode `\s`, HTML escaping): must be resolved before Go implements the normalizer. | Before Phase 5 |
+| Q-004 | Lost send: if the Function's queue send keeps failing, the job stays `queued` with no message (outbox or sweeper needed). | Phase 6 |
+| Q-005 | Notify is not repeated if a worker crashes after committing but before completing the message. | Phase 5 reconciliation |
+| Q-006 | Phase 2 packaging: the worker Docker build context must be the repo root to include `shared/`; the Function needs `shared/` vendored. | Phase 2 |
+| Q-007 | CONTRACTS says the internal endpoint is protected by "internal ingress"; ingress is configured per app, not per route, so the shared secret may be the only protection. | Phase 2/3 |
+| Q-008 | "Any single cell below threshold → review" may flag too many documents on large marksheets; treat the threshold as tunable. | Phase 4 |
+| Q-009 | Real OCR output may fail normalization (non-ISO date, non-numeric marks): route to `needs_review` rather than `failed` | Phase 4 |
 
 ---
 
