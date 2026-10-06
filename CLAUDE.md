@@ -39,3 +39,8 @@ make lint       # Lint all code
 5. **If the implementation must differ from the design,** update the docs in the same commit and add an entry to `docs/DECISIONS.md`.
 6. **Do not claim a measurement or result that hasn't been measured.**
 7. **Keep Postgres access, SAS generation, and queue access behind small interfaces** so they can be faked locally.
+8. **Never run any mutating `az` command** (read-only `az` and `az bicep build/lint` are allowed). The owner runs every deployment.
+9. **Never run `az group delete`.**
+10. **Never deploy or configure anything with `AUTH_MODE=dev` or `APP_ENV=local` outside a developer laptop.** The Go API is not deployed in Phase 2.
+11. **Azure resources exist only through Bicep.**
+12. **Never paste or commit secrets, SAS URLs or connection strings.** Identifiers (subscription, tenant, object ids, IPs) come from environment variables, not the repo.
