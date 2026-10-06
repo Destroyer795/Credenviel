@@ -1,4 +1,4 @@
-# Certificate Digitization & Verification Pipeline
+# Credenviel- Certificate Digitization & Verification Pipeline
 
 An Azure-native pipeline that digitizes paper/scanned certificates into structured, confidence-scored, hash-verified records — with KEDA-based scale-to-zero and an issuer review workflow for low-confidence OCR extractions.
 
