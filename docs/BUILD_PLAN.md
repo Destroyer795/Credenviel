@@ -53,27 +53,42 @@
 
 ## Phase 2 — Cloud Core Infrastructure
 
-**What:** Deploy core Azure cloud resources using the two-pass Bicep workflow. Validate the event-driven upload pipeline in the cloud.
+**What:** Run the real event-driven pipeline on Azure, all infrastructure as Bicep, in three gated sub-phases. Full procedure, owner commands and agent prompts: [PHASE2_HANDOVER.md](PHASE2_HANDOVER.md) (where it differs from the runbook, the handover wins).
 
-**Workflow:**
-1. Bicep Pass 1: Provision ACR, Storage Account (`raw-uploads`, `stamped-documents`), PostgreSQL Flexible Server, Key Vault, Service Bus, SignalR Service, and Container Apps Managed Environment.
-2. Build and push Go API and Python Worker images to ACR tagged with Git commit SHA (`${{ github.sha }}`).
-3. Bicep Pass 2: Deploy Container Apps and Function App with `apiImageTag` and `workerImageTag` parameters.
+**Scope changes from the earlier plan:**
+- The Go API runs **on the owner's laptop against Azure** and is **NOT deployed** in Phase 2 (it would run with dev auth). It is deployed to Container Apps in Phase 3 once real auth exists.
+- User-delegation SAS generation moves from Phase 3 into Phase 2 (needed for the real browser-style upload).
+- SignalR is removed from Phase 2 and stays in Phase 5.
+- The single two-pass workflow is split into 2a, 2b and 2c (D-012's two-pass image-tag approach still applies to the worker in 2c).
 
-**Acceptance tests:**
-- [ ] Bicep Pass 1 deploys all foundational cloud resources to a dedicated resource group.
-- [ ] Images build and push to ACR tagged with commit SHA.
-- [ ] Bicep Pass 2 deploys API and Worker Container Apps and the Azure Function App.
-- [ ] Direct browser SAS upload to `raw-uploads` triggers Azure Function via Event Grid.
-- [ ] Function validates blob and enqueues job ID to Service Bus `job-processing` queue.
-- [ ] KEDA scales worker replicas from 0 → 1 based on queue backlog.
-- [ ] Cloud worker dequeues message, processes with stub extractor, and writes record to PostgreSQL Flexible Server.
+**Sub-phases** (each ends at a checkpoint before the next starts; the owner runs every mutating `az` command, the reviewer reads every Bicep diff and `what-if`):
+
+### 2a — Bootstrap
+Monitoring workspace, ACR, Key Vault, Storage (with CORS), Service Bus, user-assigned managed identity with role assignments.
+- [ ] `az bicep build` and `lint` clean; `what-if` reviewed; all expected resources exist with tags `project=credenviel`, `env=dev`; nothing unexpected. Tag `phase-2a`.
+
+### 2b — Data and real adapters
+Postgres Flexible Server, test resources, Azure adapters (Service Bus queue, Blob store, Go user-delegation SAS), Azure migrate/test/run targets.
+- [ ] A real SAS upload (with `x-ms-blob-type: BlockBlob`) lands in Blob.
+- [ ] A real message round-trips on Service Bus.
+- [ ] Migrations 001 and 002 applied to Azure Postgres.
+- [ ] `make test` and `make test-integration` still green; Postgres stopped at end of session. Tag `phase-2b`.
+
+### 2c — Compute and end-to-end
+Container Apps environment, worker app with KEDA rule, Function app, Event Grid subscription (behind a flag), Dockerfile, packaging, e2e and scale-test scripts.
+- [ ] `az bicep build`, lint, `what-if` clean; resources in the dedicated group with tags.
+- [ ] Real upload triggers the Function via Event Grid; job becomes `queued`; message lands on Service Bus.
+- [ ] Worker scales 0 to at least 1, job `processed` with the stub extractor, record row in Azure Postgres.
+- [ ] Replicas return to 0 after the 5-minute cooldown.
+- [ ] Worker shuts down cleanly on SIGTERM (scale-in does not lose or corrupt a job).
+- [ ] `make test`, `make test-integration` and CI green; secret scan clean; Postgres stopped.
+- [ ] Evidence captured; merged with a merge commit; tag `phase-2`.
 
 ---
 
 ## Phase 3 — Authentication & Authorization
 
-**What:** Microsoft Entra ID integration, app roles (`Issuer`, `Student`), JWT validation middleware in Go API, JIT user provisioning, and scoped user-delegation SAS token generation.
+**What:** Microsoft Entra ID integration, app roles (`Issuer`, `Student`), JWT validation middleware in Go API, JIT user provisioning, and scoped user-delegation SAS token generation (implemented in Phase 2; here it moves to the API's managed identity). Also: decide the Entra tenant strategy (app registration is blocked in the university tenant; see D-031 / Q-010) and deploy the API to Container Apps once real auth exists.
 
 **Acceptance tests:**
 - [ ] Unauthenticated requests to protected API endpoints return HTTP 401 Unauthorized.
@@ -81,6 +96,8 @@
 - [ ] Caller with `Student` app role can only view and manage their own jobs (`uploader_id`).
 - [ ] Caller with `Issuer` app role can view all institutional jobs, trigger bulk upload, and access review endpoints.
 - [ ] User-delegation SAS tokens are generated dynamically using API managed identity, scoped strictly to the target blob path with write-only permissions.
+- [ ] Entra tenant strategy decided and recorded (separate personal tenant, university IT, or self-issued JWT behind `IdentitySource`).
+- [ ] Go API deployed to Container Apps with real auth (never with `AUTH_MODE=dev`).
 - [ ] Dev-bypass configuration allows local development without requiring live Entra tokens.
 
 ---
