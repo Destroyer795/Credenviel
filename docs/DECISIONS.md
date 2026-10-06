@@ -46,6 +46,13 @@
 | D-029 | Worker error categorization and retry semantics | PROPOSED | Distinguishes `FatalError` (missing blob, 0-byte file, unsupported layout) which transitions job to `failed` with `failure_reason` and completes the message, from transient exceptions which abandon the message for redelivery. When delivery count exceeds maximum deliveries, the message is dead-lettered while the job remains in `processing` status until dead-letter processing or administrative sweeper acts. In unexpected state `awaiting_upload`, worker abandons the message. |
 | D-030 | Records table stores raw extracted fields; `fields_hash` computed from normalized copy | PROPOSED | Preserves high-fidelity OCR output including original casing, punctuation, and marks extraction order for human inspection and official record presentation. Normalization (whitespace collapsing, case-folding, subject-code sorting) is applied strictly to an in-memory copy used to compute `fields_hash`. Re-normalizing the stored record produces the identical `fields_hash`. |
 
+## Proposed (Phase 2)
+
+| # | Decision | Status | Rationale |
+|---|---|---|---|
+| D-031 | Entra app registration is blocked in the university tenant (`az ad app create` fails with insufficient privileges) | PROPOSED (fact recorded; strategy is open, see Q-010) | No impact on Phase 2. Phase 3 needs a tenant strategy. |
+| D-032 | Phase 2 scope: Go API runs on the owner's laptop and is not deployed; user-delegation SAS moves into Phase 2; SignalR stays in Phase 5 | PROPOSED | The API only has dev auth until Phase 3, so deploying it earlier would expose dev auth. Supersedes the earlier BUILD_PLAN Phase 2/3 wording. See [PHASE2_HANDOVER.md](PHASE2_HANDOVER.md). |
+
 ## Open Questions (Phase 1)
 
 | # | Question | Deferred to |
@@ -59,6 +66,7 @@
 | Q-007 | CONTRACTS says the internal endpoint is protected by "internal ingress"; ingress is configured per app, not per route, so the shared secret may be the only protection. | Phase 2/3 |
 | Q-008 | "Any single cell below threshold → review" may flag too many documents on large marksheets; treat the threshold as tunable. | Phase 4 |
 | Q-009 | Real OCR output may fail normalization (non-ISO date, non-numeric marks): route to `needs_review` rather than `failed` | Phase 4 |
+| Q-010 | Entra tenant strategy for Phase 3: (1) separate free tenant under a personal Microsoft account, API validates that issuer; (2) ask university IT for an app registration; (3) self-issued JWT login behind the `IdentitySource` interface. | Phase 3 (decide early) |
 
 ---
 
