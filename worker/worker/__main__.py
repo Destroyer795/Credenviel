@@ -8,7 +8,9 @@ import time
 
 import psycopg
 
+from credenviel_shared.blob_store import BlobStore
 from credenviel_shared.local_queue import LocalQueue
+from credenviel_shared.service_bus_queue import ServiceBusQueue
 from credenviel_shared.store import LocalFileStore
 from worker.config import load_config
 from worker.extractor import StubExtractor
@@ -70,11 +72,25 @@ def main() -> None:
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
 
-    store = LocalFileStore(config["local_storage_root"])
+    if config["store_backend"] == "blob":
+        store = BlobStore(
+            storage_account_name=config["storage_account_name"],
+            managed_identity_client_id=config["azure_client_id"] or None,
+        )
+    else:
+        store = LocalFileStore(config["local_storage_root"])
+
     extractor = StubExtractor(profile=args.stub_profile)
 
     with psycopg.connect(config["database_url"], autocommit=True) as conn:
-        queue = LocalQueue(conn)
+        if config["queue_backend"] == "servicebus":
+            queue = ServiceBusQueue(
+                fully_qualified_namespace=config["servicebus_fqdn"],
+                queue_name=config["servicebus_queue"],
+                managed_identity_client_id=config["azure_client_id"] or None,
+            )
+        else:
+            queue = LocalQueue(conn)
         processor = WorkerProcessor(
             conn=conn,
             queue=queue,
