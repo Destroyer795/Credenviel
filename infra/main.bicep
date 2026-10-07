@@ -4,10 +4,13 @@
 // Phase 2a deploys the bootstrap resources: monitoring, ACR, Key Vault, Storage,
 // Service Bus and the managed identity with its role assignments.
 //
+// Phase 2b adds: Postgres Flexible Server, test resources (test-scratch container,
+// job-processing-test queue), and stores the Postgres password in Key Vault.
+//
 // Usage (resource-group scope; see infra/README.md for the full owner sequence):
 //   az bicep build --file infra/main.bicep
 //   az deployment group what-if -g rg-credenviel-dev -p infra/parameters/dev.bicepparam
-//   az deployment group create  -g rg-credenviel-dev -p infra/parameters/dev.bicepparam -n p2a-1
+//   az deployment group create  -g rg-credenviel-dev -p infra/parameters/dev.bicepparam -n p2b-1
 
 targetScope = 'resourceGroup'
 
@@ -32,6 +35,16 @@ param corsAllowedOrigins array = [
 
 @description('Object ID of the developer user (read from DEV_PRINCIPAL_ID in dev.bicepparam). Empty skips the developer role grants.')
 param developerPrincipalId string = ''
+
+@secure()
+@description('Postgres admin password (read from PG_ADMIN_PASSWORD env). Empty means Postgres is not deployed.')
+param pgAdminPassword string = ''
+
+@description('Developer public IP for Postgres firewall rule (read from DEV_IP env). Empty skips the rule.')
+param developerIp string = ''
+
+@description('Deploy test resources (test-scratch container, job-processing-test queue). True for dev.')
+param enableTestResources bool = true
 
 var tags = {
   project: 'credenviel'
@@ -68,6 +81,7 @@ module storage 'modules/storage.bicep' = {
     location: location
     tags: tags
     corsAllowedOrigins: corsAllowedOrigins
+    enableTestResources: enableTestResources
   }
 }
 
@@ -76,6 +90,7 @@ module serviceBus 'modules/service-bus.bicep' = {
   params: {
     location: location
     tags: tags
+    enableTestResources: enableTestResources
   }
 }
 
@@ -92,8 +107,20 @@ module identity 'modules/identity.bicep' = {
   }
 }
 
+// Postgres: deployed when a password is provided; skipped otherwise.
+// This lets 2a redeploys work without the PG_ADMIN_PASSWORD set.
+module postgres 'modules/postgres.bicep' = if (!empty(pgAdminPassword)) {
+  name: 'postgres'
+  params: {
+    location: location
+    tags: tags
+    adminPassword: pgAdminPassword
+    developerIp: developerIp
+    keyVaultName: keyVault.outputs.vaultName
+  }
+}
+
 // Stubs, implemented in later sub-phases:
-//   postgres            (2b)
 //   container-apps-env  (2c)
 //   worker-app          (2c)
 //   function-app        (2c)
@@ -115,3 +142,14 @@ output serviceBusQueueName string = serviceBus.outputs.queueName
 output identityName string = identity.outputs.identityName
 output identityClientId string = identity.outputs.identityClientId
 output identityPrincipalId string = identity.outputs.identityPrincipalId
+// Postgres outputs (only meaningful when deployed; check postgresDeployed before using)
+#disable-next-line outputs-should-not-contain-secrets
+output postgresDeployed bool = !empty(pgAdminPassword)
+#disable-next-line outputs-should-not-contain-secrets
+output postgresServerName string = postgres.?outputs.serverName ?? ''
+#disable-next-line outputs-should-not-contain-secrets
+output postgresServerFqdn string = postgres.?outputs.serverFqdn ?? ''
+#disable-next-line outputs-should-not-contain-secrets
+output postgresDatabaseName string = postgres.?outputs.databaseName ?? ''
+#disable-next-line outputs-should-not-contain-secrets
+output postgresSecretName string = postgres.?outputs.secretName ?? ''

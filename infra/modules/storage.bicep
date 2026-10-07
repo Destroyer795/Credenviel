@@ -19,6 +19,9 @@ param corsAllowedOrigins array = [
   'http://localhost:5173'
 ]
 
+@description('Deploy test containers (test-scratch). True for dev.')
+param enableTestResources bool = false
+
 @description('Headers the browser may send on a SAS upload. Widen to ["*"] only if a real upload is rejected at preflight.')
 param corsAllowedHeaders array = [
   'x-ms-blob-type'
@@ -86,6 +89,15 @@ resource rawUploads 'Microsoft.Storage/storageAccounts/blobServices/containers@2
 resource stampedDocuments 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   parent: blobService
   name: 'stamped-documents'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+// Test container — used only by adapter tests (test-azure); behind enableTestResources.
+resource testScratch 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = if (enableTestResources) {
+  parent: blobService
+  name: 'test-scratch'
   properties: {
     publicAccess: 'None'
   }
