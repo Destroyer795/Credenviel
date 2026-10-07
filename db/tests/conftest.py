@@ -42,6 +42,11 @@ def _read_sql(directory, filename):
 @pytest.fixture(scope="session")
 def test_db():
     """Create the credenviel_test database (drop if exists) once per session."""
+    if POSTGRES_HOST.lower() not in ("localhost", "127.0.0.1", "::1"):
+        raise RuntimeError(
+            f"SAFETY VIOLATION: Refusing to run tests against non-local database host '{POSTGRES_HOST}'. "
+            f"Only 'localhost' or '127.0.0.1' is permitted."
+        )
     conn = psycopg.connect(MAINTENANCE_DSN, autocommit=True)
     try:
         conn.execute(f"DROP DATABASE IF EXISTS {TEST_DB_NAME} WITH (FORCE)")
