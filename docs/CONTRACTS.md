@@ -194,7 +194,7 @@ The JIT user provisioning executes identically using these claims.
 |---|---|---|
 | `PUT` | `/dev/upload/:jobId/:file` | Direct upload simulation endpoint (no auth headers required, mimics SAS URL). Enforces size cap and requires job in `awaiting_upload`. |
 
-### POST /api/v1/jobs Response Contract (Phase 1 update — PROPOSED)
+### POST /api/v1/jobs Response Contract (Phase 2b contract update — PROPOSED)
 
 Status: `201 Created`
 ```json
@@ -203,11 +203,31 @@ Status: `201 Created`
   "blob_key": "raw-uploads/<uuid>/<sanitized_filename>",
   "upload": {
     "method": "PUT",
-    "url": "http://127.0.0.1:8080/dev/upload/<uuid>/<sanitized_filename>",
-    "expires_at": "2026-10-04T03:00:00Z"
+    "url": "https://<storageAccount>.blob.core.windows.net/raw-uploads/<uuid>/<sanitized_filename>?<sas_query>",
+    "expires_at": "2026-10-04T03:15:00Z",
+    "headers": {
+      "x-ms-blob-type": "BlockBlob"
+    }
   }
 }
 ```
+*Note on `headers`:*
+- When `STORE_BACKEND=blob`: `headers` contains `{"x-ms-blob-type": "BlockBlob"}`. Azure Blob Storage requires this header on `PUT` blob requests; requests omitting it are rejected with HTTP 400.
+- When `STORE_BACKEND=local`: `headers` is `{}`. Clients should forward any keys in `upload.headers` when performing the direct `PUT`.
+
+### Backend Configuration Environment Variables (Phase 2b — PROPOSED)
+
+All services use pluggable storage and queue backends selected via environment variables. Defaults are `local` so that unit tests, local integration tests, and CI run without Azure credentials or cloud services.
+
+| Variable | Values | Default | Description |
+|---|---|---|---|
+| `QUEUE_BACKEND` | `local`, `servicebus` | `local` | Queue adapter selection (`LocalQueue` in PostgreSQL vs `ServiceBusQueue`) |
+| `STORE_BACKEND` | `local`, `blob` | `local` | Object store adapter selection (`LocalFileStore` vs `BlobStore` / Azure SAS) |
+| `SERVICEBUS_FQDN` | string | `""` | Service Bus namespace FQDN (e.g. `sb-cred-xxx.servicebus.windows.net`) |
+| `SERVICEBUS_QUEUE` | string | `job-processing` | Target Service Bus queue name |
+| `STORAGE_ACCOUNT_NAME` | string | `""` | Azure Storage account name for Blob access and SAS signing |
+| `AZURE_CLIENT_ID` | string | `""` | User-assigned managed identity client ID; empty falls back to Azure CLI credentials |
+
 
 ### Authentication & Authorization Rules
 

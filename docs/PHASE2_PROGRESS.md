@@ -155,3 +155,34 @@ Deployed to `eastasia` (not `centralindia`): the subscription's region policy re
 Lessons:
 - `DEV_PRINCIPAL_ID` is read from the shell environment, so it must be exported in the same terminal before every `what-if` and `create`; a new terminal silently skips the developer roles.
 - `what-if` reports noise for Azure-defaulted properties; the 11 "modify" entries were not real changes.
+
+---
+
+## 2b: Data and real adapters
+
+### Local checks (agent, no Azure mutating calls)
+
+- `az bicep build --file infra/main.bicep`: exit 0, clean build.
+- `az bicep lint --file infra/main.bicep`: exit 0, clean lint.
+- `az bicep lint` on all modules (`postgres.bicep`, `service-bus.bicep`, `storage.bicep`): exit 0.
+- Python unit tests: `pytest -m "not integration and not azure" -v`: 29 passed, 83 deselected.
+- Go unit tests: `go test ./...`: all passed.
+- Go Azure test compilation: `go test -tags azure -c -o NUL ./internal/storage`: compiled successfully.
+- Database test guards verified:
+  - Python test harnesses (`testdb.py`, `conftest.py`) reject non-local hosts and databases other than `credenviel_test`.
+  - Go test harness (`db_guard.go`, `integration_test.go`) enforces `ValidateTestDBTarget(dbName, host)`.
+
+### Owner steps (to be run by the owner against Azure)
+
+- [ ] Export `PG_ADMIN_PASSWORD` (min 12 chars, letters + digits) and optional `DEV_IP`
+- [ ] `az deployment group what-if -g rg-credenviel-dev -p infra/parameters/dev.bicepparam`
+  - Expected: Postgres Flexible Server, database `credenviel`, Key Vault secret `postgres-admin-password`, test container `test-scratch`, test queue `job-processing-test`.
+- [ ] `az deployment group create -g rg-credenviel-dev -p infra/parameters/dev.bicepparam -n p2b-1`
+- [ ] `unset PG_ADMIN_PASSWORD`
+- [ ] `make migrate-azure` (applies `db/migrations` 001 and 002 ONLY; prompts for typed confirmation `yes`)
+- [ ] `make test-azure` (runs Python adapter tests and Go SAS tests against `test-scratch` and `job-processing-test`)
+- [ ] `make run-api-azure` (starts API locally against Azure Blob and Postgres with dev auth)
+- [ ] Test real upload: create job via API, PUT document to signed SAS URL with `x-ms-blob-type: BlockBlob`
+- [ ] Stop Postgres at end of work session:
+  `az postgres flexible-server stop -g rg-credenviel-dev -n <postgres-server-name>`
+
