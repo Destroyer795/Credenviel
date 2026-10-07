@@ -42,14 +42,31 @@ func run(ctx context.Context, getenv func(string) string) error {
 	}
 	defer database.Close()
 
-	localStore, err := storage.NewLocalFS(cfg.LocalStorageRoot)
-	if err != nil {
-		return fmt.Errorf("storage initialization failed: %w", err)
+	var store storage.Store
+	var signer storage.UploadSigner
+
+	if cfg.StoreBackend == "blob" {
+		azureStore, err := storage.NewAzureBlobStore(cfg.StorageAccountName, cfg.AzureClientID)
+		if err != nil {
+			return fmt.Errorf("azure blob store initialization failed: %w", err)
+		}
+		store = azureStore
+
+		azureSigner, err := storage.NewAzureBlobSigner(cfg.StorageAccountName, cfg.AzureClientID)
+		if err != nil {
+			return fmt.Errorf("azure blob signer initialization failed: %w", err)
+		}
+		signer = azureSigner
+	} else {
+		localStore, err := storage.NewLocalFS(cfg.LocalStorageRoot)
+		if err != nil {
+			return fmt.Errorf("storage initialization failed: %w", err)
+		}
+		store = localStore
+		signer = storage.NewLocalSigner(cfg.PublicBaseURL)
 	}
 
-	signer := storage.NewLocalSigner(cfg.PublicBaseURL)
-
-	srv := server.NewServer(cfg, database, database, localStore, signer)
+	srv := server.NewServer(cfg, database, database, store, signer)
 
 	addr := net.JoinHostPort(cfg.Host, cfg.Port)
 	httpServer := &http.Server{

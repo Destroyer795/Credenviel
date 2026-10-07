@@ -21,9 +21,10 @@ var (
 
 // UploadInfo contains client instructions for performing a direct upload.
 type UploadInfo struct {
-	Method    string    `json:"method"`
-	URL       string    `json:"url"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Method    string            `json:"method"`
+	URL       string            `json:"url"`
+	ExpiresAt time.Time         `json:"expires_at"`
+	Headers   map[string]string `json:"headers"`
 }
 
 // Store defines operations for storing and reading objects.
@@ -164,5 +165,6 @@ func (s *LocalSigner) SignUpload(jobID, filename string, ttl time.Duration) (Upl
 		Method:    "PUT",
 		URL:       uploadURL,
 		ExpiresAt: time.Now().UTC().Add(ttl),
+		Headers:   map[string]string{},
 	}, nil
 }
