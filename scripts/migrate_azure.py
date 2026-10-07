@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Apply database migrations (001 and 002 ONLY) to Azure PostgreSQL Flexible Server.
+
+Safety features:
+- Displays target host and database clearly.
+- Requires explicit typed confirmation ('yes').
+- Strictly excludes db/local migrations.
+- Never prints passwords or credentials.
+"""
+
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+from run_with_azure_env import resolve_azure_config
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def main():
+    print("=" * 70)
+    print("Credenviel Azure PostgreSQL Migration Runner")
+    print("=" * 70)
+
+    try:
+        cfg = resolve_azure_config()
+    except Exception as e:
+        print(f"[!] Failed to resolve Azure environment: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    target_host = cfg["db_host"]
+    target_db = "credenviel"
+    target_user = "credenvieladmin"
+
+    migrations = [
+        REPO_ROOT / "db" / "migrations" / "001_initial_schema.up.sql",
+        REPO_ROOT / "db" / "migrations" / "002_status_guard.up.sql",
+    ]
+
+    for mig in migrations:
+        if not mig.exists():
+            print(f"[!] Migration file not found: {mig}", file=sys.stderr)
+            sys.exit(1)
+
+    print(f"Target Resource Group: {cfg['rg']}")
+    print(f"Target Host:           {target_host}")
+    print(f"Target Database:       {target_db}")
+    print(f"Target User:           {target_user}")
+    print(f"Migrations to apply:")
+    for mig in migrations:
+        print(f"  - {mig.relative_to(REPO_ROOT)}")
+    print("=" * 70)
+    print("WARNING: This will apply migrations to the live Azure PostgreSQL database.")
+    print("Type 'yes' to proceed: ", end="", flush=True)
+
+    try:
+        confirmation = sys.stdin.readline().strip()
+    except (KeyboardInterrupt, EOFError):
+        print("\nAborted.")
+        sys.exit(1)
+
+    if confirmation.lower() != "yes":
+        print("Aborted by user.")
+        sys.exit(1)
+
+    print("\n[*] Applying migrations...")
+
+    # Combine migrations SQL
+    combined_sql = ""
+    for mig in migrations:
+        combined_sql += f"\n-- {mig.name} --\n"
+        combined_sql += mig.read_text(encoding="utf-8") + "\n"
+
+    # Check if docker is available
+    docker_bin = shutil.which("docker")
+    docker_available = False
+    if docker_bin:
+        # Check if docker daemon is reachable
+        chk = subprocess.run([docker_bin, "info"], capture_output=True)
+        docker_available = (chk.returncode == 0)
+
+    if docker_available:
+        print("[*] Running psql via docker (postgres:16)...")
+        docker_cmd = [
+            docker_bin, "run", "--rm", "-i",
+            "-e", f"PGPASSWORD={cfg['pg_password']}",
+            "postgres:16",
+            "psql",
+            "-h", target_host,
+            "-p", "5432",
+            "-U", target_user,
+            "-d", target_db,
+            "-v", "ON_ERROR_STOP=1",
+            "--set=sslmode=require",
+        ]
+        res = subprocess.run(docker_cmd, input=combined_sql, text=True, capture_output=True)
+        if res.returncode != 0:
+            print("[!] Migration failed with docker psql:", file=sys.stderr)
+            print(res.stderr or res.stdout, file=sys.stderr)
+            sys.exit(1)
+        print(res.stdout)
+    else:
+        # Fallback to python psycopg if docker daemon is not active
+        print("[*] Docker not available; applying migrations using psycopg...")
+        try:
+            import psycopg
+            conn_str = f"postgresql://{target_user}:{cfg['pg_password']}@{target_host}:5432/{target_db}?sslmode=require"
+            with psycopg.connect(conn_str, autocommit=True) as conn:
+                with conn.cursor() as cur:
+                    for mig in migrations:
+                        sql = mig.read_text(encoding="utf-8")
+                        cur.execute(sql)
+                        print(f"    Applied {mig.name}")
+        except Exception as e:
+            print(f"[!] Migration failed: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    print("\n[✓] Migrations 001 and 002 applied successfully to Azure PostgreSQL!")
+
+
+if __name__ == "__main__":
+    main()

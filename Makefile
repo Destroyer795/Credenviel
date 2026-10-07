@@ -1,4 +1,4 @@
-.PHONY: up down setup migrate migrate-down migrate-local run-api run-worker simulate-upload test test-integration demo lint
+.PHONY: up down setup migrate migrate-down migrate-local run-api run-worker simulate-upload test test-integration test-azure run-api-azure migrate-azure demo lint
 
 # Start local Postgres + Azurite (credenviel- containers only)
 up:
@@ -50,14 +50,29 @@ test:
 	@echo "=== Go Unit Tests ==="
 	cd api && go test ./...
 	@echo "=== Python Unit Tests ==="
-	pytest -m "not integration" -v
+	pytest -m "not integration and not azure" -v
 
 # Run integration tests (requires make up)
 test-integration:
 	@echo "=== Go Integration Tests ==="
 	cd api && go test -tags integration -v ./...
 	@echo "=== Python Integration Tests ==="
-	pytest -m integration -v
+	pytest -m "integration and not azure" -v
+
+# Run Azure adapter tests (requires Azure login and dev resources)
+test-azure:
+	@echo "=== Azure Adapter Tests (Python) ==="
+	python scripts/run_with_azure_env.py pytest -m azure -v
+	@echo "=== Azure Adapter Tests (Go SAS) ==="
+	cd api && python ../scripts/run_with_azure_env.py go test -tags azure -v ./...
+
+# Run Go API server locally against Azure resources (STORE_BACKEND=blob)
+run-api-azure:
+	cd api && python ../scripts/run_with_azure_env.py go run ./cmd/server
+
+# Apply migrations 001 and 002 to Azure PostgreSQL Flexible Server
+migrate-azure:
+	python scripts/migrate_azure.py
 
 # Run cross-platform end-to-end demo
 demo:
@@ -66,3 +81,4 @@ demo:
 # Lint all code
 lint:
 	@echo "TODO: Configure linters (golangci-lint, ruff, eslint)"
+
