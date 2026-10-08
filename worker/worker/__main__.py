@@ -23,6 +23,51 @@ logging.basicConfig(
 logger = logging.getLogger("worker")
 
 
+from typing import Any, Callable
+
+def run_worker_loop(
+    processor: WorkerProcessor,
+    queue: Any,
+    poll_interval: float = 1.0,
+    once: bool = False,
+    is_running_fn: Callable[[], bool] | None = None,
+) -> int:
+    """Run worker processing loop until stopped or queue drained with once flag.
+
+    Returns the number of messages processed.
+    """
+    processed_count = 0
+    while is_running_fn() if is_running_fn else True:
+        try:
+            msg = queue.receive()
+        except Exception as e:
+            logger.warning("Error receiving message from queue: %s", e)
+            if not (is_running_fn() if is_running_fn else True):
+                break
+            time.sleep(poll_interval)
+            continue
+
+        if msg is None:
+            if once:
+                logger.info("Queue empty and --once flag set; exiting.")
+                break
+            time.sleep(poll_interval)
+            continue
+
+        try:
+            outcome = processor.process_message(msg)
+            processed_count += 1
+            msg_id = getattr(msg, "id", None)
+            logger.info("Processed message %s: outcome=%s", msg_id, outcome)
+        except Exception as e:
+            logger.exception("Error processing message: %s", e)
+            if hasattr(processor, "conn") and getattr(processor.conn, "closed", False):
+                logger.critical("Database connection was closed; terminating worker loop to trigger container restart")
+                raise
+
+    return processed_count
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Certificate Digitization Worker"
@@ -61,12 +106,13 @@ def main() -> None:
 
     config = load_config()
 
-    # Signal handling for clean exit on Ctrl-C
+    # Signal handling for clean exit on SIGTERM/SIGINT
     running = True
 
     def handle_signal(sig, frame):
         nonlocal running
-        logger.info("Shutdown signal received; finishing current task...")
+        sig_name = "SIGTERM" if sig == signal.SIGTERM else "SIGINT"
+        logger.info("Shutdown signal %s received; finishing current task...", sig_name)
         running = False
 
     signal.signal(signal.SIGINT, handle_signal)
@@ -103,22 +149,16 @@ def main() -> None:
 
         logger.info("Worker started, polling queue 'job-processing'...")
 
-        while running:
-            msg = queue.receive()
-            if msg is None:
-                if args.once:
-                    logger.info("Queue empty and --once flag set; exiting.")
-                    break
-                time.sleep(args.poll_interval)
-                continue
+        run_worker_loop(
+            processor=processor,
+            queue=queue,
+            poll_interval=args.poll_interval,
+            once=args.once,
+            is_running_fn=lambda: running,
+        )
 
-            try:
-                outcome = processor.process_message(msg)
-                logger.info("Processed message %s: outcome=%s", msg.id, outcome)
-            except Exception as e:
-                logger.exception("Error processing message %s: %s", msg.id, e)
-
-        logger.info("Worker stopped.")
+        logger.info("Worker stopped cleanly.")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
