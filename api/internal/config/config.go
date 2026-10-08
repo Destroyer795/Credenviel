@@ -24,6 +24,10 @@ type Config struct {
 	StoreBackend        string
 	StorageAccountName  string
 	AzureClientID       string
+	EntraTenantID       string
+	EntraClientID       string
+	EntraAudience       string
+	JWTSymmetricSecret  string
 }
 
 // Load reads configuration using the provided environment lookup function.
@@ -34,6 +38,9 @@ func LoadWith(getenv func(string) string) *Config {
 			maxUpload = parsed
 		}
 	}
+
+	clientID := getVal(getenv, "ENTRA_CLIENT_ID", "")
+	audience := getVal(getenv, "ENTRA_AUDIENCE", clientID)
 
 	return &Config{
 		Host:                getVal(getenv, "HOST", "127.0.0.1"),
@@ -53,6 +60,10 @@ func LoadWith(getenv func(string) string) *Config {
 		StoreBackend:        getVal(getenv, "STORE_BACKEND", "local"),
 		StorageAccountName:  getVal(getenv, "STORAGE_ACCOUNT_NAME", ""),
 		AzureClientID:       getVal(getenv, "AZURE_CLIENT_ID", ""),
+		EntraTenantID:       getVal(getenv, "ENTRA_TENANT_ID", ""),
+		EntraClientID:       clientID,
+		EntraAudience:       audience,
+		JWTSymmetricSecret:  getVal(getenv, "JWT_SYMMETRIC_SECRET", ""),
 	}
 }
 

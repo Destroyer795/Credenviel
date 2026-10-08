@@ -40,7 +40,24 @@ func TestRun_RefusesDevAuthWhenNotLocal(t *testing.T) {
 	}
 }
 
-func TestRun_RefusesNonDevAuthMode(t *testing.T) {
+func TestRun_UnsupportedAuthMode(t *testing.T) {
+	ctx := context.Background()
+	env := map[string]string{
+		"INTERNAL_API_KEY": "secret-key",
+		"AUTH_MODE":        "unsupported_mode",
+		"APP_ENV":          "local",
+	}
+
+	err := run(ctx, func(k string) string { return env[k] })
+	if err == nil {
+		t.Fatalf("expected error for unsupported AUTH_MODE, got nil")
+	}
+	if !strings.Contains(err.Error(), "unsupported AUTH_MODE") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_EntraMissingConfig(t *testing.T) {
 	ctx := context.Background()
 	env := map[string]string{
 		"INTERNAL_API_KEY": "secret-key",
@@ -50,9 +67,26 @@ func TestRun_RefusesNonDevAuthMode(t *testing.T) {
 
 	err := run(ctx, func(k string) string { return env[k] })
 	if err == nil {
-		t.Fatalf("expected error for AUTH_MODE=entra, got nil")
+		t.Fatalf("expected error for missing ENTRA config, got nil")
 	}
-	if !strings.Contains(err.Error(), "unsupported AUTH_MODE") {
+	if !strings.Contains(err.Error(), "ENTRA_TENANT_ID and ENTRA_CLIENT_ID") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestRun_JWTMissingConfig(t *testing.T) {
+	ctx := context.Background()
+	env := map[string]string{
+		"INTERNAL_API_KEY": "secret-key",
+		"AUTH_MODE":        "jwt",
+		"APP_ENV":          "local",
+	}
+
+	err := run(ctx, func(k string) string { return env[k] })
+	if err == nil {
+		t.Fatalf("expected error for missing JWT config, got nil")
+	}
+	if !strings.Contains(err.Error(), "JWT_SYMMETRIC_SECRET or ENTRA_TENANT_ID") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

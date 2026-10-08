@@ -52,8 +52,23 @@ func (s *Server) routes() {
 	// Health check
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
 
+	var identitySource auth.IdentitySource
+	switch s.cfg.AuthMode {
+	case "dev":
+		identitySource = auth.DevHeaderSource{}
+	case "entra", "jwt":
+		identitySource = auth.NewJWTIdentitySource(auth.JWTConfig{
+			TenantID:        s.cfg.EntraTenantID,
+			ClientID:        s.cfg.EntraClientID,
+			Audience:        s.cfg.EntraAudience,
+			SymmetricSecret: s.cfg.JWTSymmetricSecret,
+		})
+	default:
+		identitySource = auth.DevHeaderSource{}
+	}
+
 	// Auth middleware
-	authMiddleware := auth.Middleware(auth.DevHeaderSource{}, s.userStore)
+	authMiddleware := auth.Middleware(identitySource, s.userStore)
 
 	// Authenticated jobs routes
 	s.mux.Handle("POST /api/v1/jobs", authMiddleware(http.HandlerFunc(s.handleCreateJob)))
