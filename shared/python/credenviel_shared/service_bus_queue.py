@@ -13,6 +13,7 @@ from azure.servicebus import (
     ServiceBusMessage,
     ServiceBusReceivedMessage,
     ServiceBusReceiveMode,
+    TransportType,
 )
 from azure.servicebus.exceptions import (
     MessageLockLostError,
@@ -65,6 +66,7 @@ class ServiceBusQueue(Queue):
             self._client = ServiceBusClient(
                 fully_qualified_namespace=self.fqdn,
                 credential=self.credential,
+                transport_type=TransportType.AmqpOverWebsocket,
             )
 
         self._receiver = None
