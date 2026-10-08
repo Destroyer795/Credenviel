@@ -31,11 +31,14 @@ export function IssuerPortal() {
 
   const filteredJobs = jobs.filter((j) => {
     if (filterStatus === 'all') return true
+    if (filterStatus === 'requires_review' || filterStatus === 'needs_review') {
+      return j.status === 'requires_review' || j.status === 'needs_review'
+    }
     return j.status === filterStatus
   })
 
   const totalCount = jobs.length
-  const reviewCount = jobs.filter((j) => j.status === 'requires_review').length
+  const reviewCount = jobs.filter((j) => j.status === 'requires_review' || j.status === 'needs_review').length
   const processedCount = jobs.filter((j) => j.status === 'processed').length
   const processingCount = jobs.filter((j) => j.status === 'processing' || j.status === 'queued').length
 
@@ -178,11 +181,11 @@ export function IssuerPortal() {
                     <td>
                       <button
                         id={`btn-review-${job.id}`}
-                        className={`btn ${job.status === 'requires_review' ? 'btn-primary' : 'btn-secondary'}`}
+                        className={`btn ${job.status === 'requires_review' || job.status === 'needs_review' ? 'btn-primary' : 'btn-secondary'}`}
                         style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
                         onClick={() => navigate(`/issuer/review?jobId=${job.id}`)}
                       >
-                        {job.status === 'requires_review' ? 'Review & Approve ⚠️' : 'Inspect'}
+                        {job.status === 'requires_review' || job.status === 'needs_review' ? 'Review & Approve ⚠️' : 'Inspect'}
                       </button>
                     </td>
                   </tr>

@@ -52,7 +52,7 @@ def _update_status(conn, job_id, new_status):
 # ── Test 1: Apply, rollback, re-apply ──────────────────────────────
 
 class TestApplyRollbackReapply:
-    """Test that migrations 001+002 apply, roll back, and re-apply cleanly."""
+    """Test that migrations 001+002+003 apply, roll back, and re-apply cleanly."""
 
     def test_apply_rollback_reapply(self, db_conn):
         """Migrations apply, roll back fully, then re-apply without error."""
@@ -64,12 +64,14 @@ class TestApplyRollbackReapply:
                 return f.read()
 
         # Clean slate
+        db_conn.execute(read_sql("003_review_rejection_guard.down.sql"))
         db_conn.execute(read_sql("002_status_guard.down.sql"))
         db_conn.execute(read_sql("001_initial_schema.down.sql"))
 
         # Apply
         db_conn.execute(read_sql("001_initial_schema.up.sql"))
         db_conn.execute(read_sql("002_status_guard.up.sql"))
+        db_conn.execute(read_sql("003_review_rejection_guard.up.sql"))
 
         # Verify tables exist
         result = db_conn.execute(
@@ -88,6 +90,7 @@ class TestApplyRollbackReapply:
         assert [r[0] for r in cols] == ["failure_reason", "uploader_is_issuer"]
 
         # Rollback
+        db_conn.execute(read_sql("003_review_rejection_guard.down.sql"))
         db_conn.execute(read_sql("002_status_guard.down.sql"))
         db_conn.execute(read_sql("001_initial_schema.down.sql"))
 
@@ -101,6 +104,7 @@ class TestApplyRollbackReapply:
         # Re-apply
         db_conn.execute(read_sql("001_initial_schema.up.sql"))
         db_conn.execute(read_sql("002_status_guard.up.sql"))
+        db_conn.execute(read_sql("003_review_rejection_guard.up.sql"))
 
         # Verify again
         result = db_conn.execute(
@@ -111,6 +115,7 @@ class TestApplyRollbackReapply:
         assert [r[0] for r in result] == ["jobs", "records", "users"]
 
         # Cleanup
+        db_conn.execute(read_sql("003_review_rejection_guard.down.sql"))
         db_conn.execute(read_sql("002_status_guard.down.sql"))
         db_conn.execute(read_sql("001_initial_schema.down.sql"))
 
@@ -137,7 +142,6 @@ class TestGuardRejectsInvalid:
         ("needs_review", "awaiting_upload"),
         ("needs_review", "queued"),
         ("needs_review", "processing"),
-        ("needs_review", "failed"),
         ("failed", "awaiting_upload"),
         ("failed", "queued"),
         ("failed", "processing"),
@@ -190,6 +194,7 @@ class TestGuardAllowsValid:
         ("processing", "needs_review"),
         ("processing", "failed"),
         ("needs_review", "processed"),
+        ("needs_review", "failed"),
     ]
 
     PATHS_TO_STATE = {

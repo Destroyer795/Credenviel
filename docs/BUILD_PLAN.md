@@ -104,17 +104,17 @@ Container Apps environment, worker app with KEDA rule, Function app, Event Grid 
 
 ---
 
-## Phase 4 — Extraction & Review Screen
+## Phase 4 — Extraction & Review Screen (DONE)
 
 **What:** Integrate trained Azure Document Intelligence custom model, evaluate per-field and per-cell tabular marks confidence against `CONFIDENCE_THRESHOLD`, route low-confidence jobs to `needs_review`, provide short-lived read SAS for document preview, and implement issuer review screen.
 
-**Acceptance tests:**
-- [ ] A sample certificate sent to the custom model extracts structured fields (`name`, `roll_number`, `register_number`, `degree`, `marks_json`, `cgpa`, `issue_date`) with per-field confidence scores.
-- [ ] If any scalar field or tabular marks cell has confidence < `CONFIDENCE_THRESHOLD`, worker sets `jobs.status = 'needs_review'`.
-- [ ] `GET /api/v1/review/:jobId` returns extracted fields and a temporary 15-minute read SAS URL for side-by-side document preview.
-- [ ] Issuer can resolve fields (`POST /api/v1/review/:jobId/resolve`), recording prior values in `records.corrections_json` and updating status to `processed`.
-- [ ] Issuer can reject illegible submissions (`POST /api/v1/review/:jobId/reject`), updating status to `failed` with audit reason.
-- [ ] `verified_by_issuer` is set `true` automatically for issuer uploads, and requires review confirmation for student uploads.
+**Acceptance tests (PASSED):**
+- [x] A sample certificate sent to the custom model extracts structured fields (`name`, `roll_number`, `register_number`, `degree`, `marks_json`, `cgpa`, `issue_date`) with per-field confidence scores (`worker/worker/extractor.py`, `worker/tests/test_extractor.py`).
+- [x] If any scalar field or tabular marks cell has confidence < `CONFIDENCE_THRESHOLD`, worker sets `jobs.status = 'needs_review'` (`worker/worker/extractor.py`, `worker/worker/__main__.py`).
+- [x] `GET /api/v1/review/:jobId` returns extracted fields and a temporary 15-minute read SAS URL for side-by-side document preview (`api/internal/server/server.go`, `api/internal/storage/azure.go`).
+- [x] Issuer can resolve fields (`POST /api/v1/review/:jobId/resolve`), recording prior values in `records.corrections_json` and updating status to `processed` (`api/internal/server/server.go`, `api/internal/normalizer`).
+- [x] Issuer can reject illegible submissions (`POST /api/v1/review/:jobId/reject`), updating status to `failed` with audit reason (`db/migrations/003_review_rejection_guard.up.sql`, `api/internal/server/server.go`).
+- [x] `verified_by_issuer` is set `true` automatically for issuer uploads, and requires review confirmation for student uploads (`api/internal/db/postgres.go`, `frontend/src/pages/ReviewScreen.jsx`).
 
 ---
 

@@ -46,3 +46,4 @@ azdata/
 _pdf_text.txt
 *.log
 scale_test_results.csv
+/*Report*.pdf

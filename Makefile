@@ -13,16 +13,18 @@ setup:
 	pip install -r requirements-dev.txt
 	pip install -e shared/python
 
-# Apply database migrations (001 + 002) — never touches db/local/
+# Apply database migrations (001 + 002 + 003) — never touches db/local/
 migrate:
 	@echo "Applying migrations against local Postgres..."
 	docker compose exec -T postgres psql -U credenviel -d credenviel -f /migrations/001_initial_schema.up.sql
 	docker compose exec -T postgres psql -U credenviel -d credenviel -f /migrations/002_status_guard.up.sql
+	docker compose exec -T postgres psql -U credenviel -d credenviel -f /migrations/003_review_rejection_guard.up.sql
 	@echo "Migrations applied."
 
-# Roll back database migrations (002 then 001)
+# Roll back database migrations (003 then 002 then 001)
 migrate-down:
 	@echo "Rolling back migrations against local Postgres..."
+	docker compose exec -T postgres psql -U credenviel -d credenviel -f /migrations/003_review_rejection_guard.down.sql
 	docker compose exec -T postgres psql -U credenviel -d credenviel -f /migrations/002_status_guard.down.sql
 	docker compose exec -T postgres psql -U credenviel -d credenviel -f /migrations/001_initial_schema.down.sql
 	@echo "Migrations rolled back."

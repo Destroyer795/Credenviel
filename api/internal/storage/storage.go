@@ -39,6 +39,11 @@ type UploadSigner interface {
 	SignUpload(jobID, filename string, ttl time.Duration) (UploadInfo, error)
 }
 
+// ReadSigner generates read URLs for document preview.
+type ReadSigner interface {
+	SignRead(blobKey string, ttl time.Duration) (string, error)
+}
+
 // LocalFS implements Store backed by the local filesystem.
 type LocalFS struct {
 	root string
@@ -167,4 +172,9 @@ func (s *LocalSigner) SignUpload(jobID, filename string, ttl time.Duration) (Upl
 		ExpiresAt: time.Now().UTC().Add(ttl),
 		Headers:   map[string]string{},
 	}, nil
+}
+
+func (s *LocalSigner) SignRead(blobKey string, ttl time.Duration) (string, error) {
+	cleanKey := strings.Trim(strings.ReplaceAll(blobKey, "\\", "/"), "/")
+	return fmt.Sprintf("%s/dev/preview/%s", s.baseURL, cleanKey), nil
 }

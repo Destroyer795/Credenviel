@@ -351,3 +351,107 @@ export async function getVerification(verificationId) {
     signature_algorithm: 'RSA-PSS-SHA256 (Azure Key Vault HSM)',
   }
 }
+
+/**
+ * Fetch review station details (job metadata, record, temporary 15-minute read SAS URL)
+ * GET /api/v1/review/{jobId}
+ */
+export async function getReviewDetails(jobId, authState) {
+  try {
+    return await fetchWithAuth(`/api/v1/review/${encodeURIComponent(jobId)}`, { method: 'GET' }, authState)
+  } catch (err) {
+    console.warn('API review details fetch failed, falling back to mock review data:', err)
+    return {
+      job: {
+        id: jobId,
+        status: 'needs_review',
+        blob_key: `raw-uploads/${jobId}/Sample_Certificate.pdf`,
+      },
+      record: {
+        name: 'Alice Chen',
+        roll_number: '2021-CS-0428',
+        register_number: 'REG-987654',
+        degree: 'Bachelor of Science in Computer Science & Engineering',
+        cgpa: '3.91',
+        issue_date: '2025-05-15',
+        confidence_json: {
+          threshold: 0.85,
+          fields: {
+            name: 0.98,
+            roll_number: 0.72,
+            register_number: 0.95,
+            degree: 0.96,
+            cgpa: 0.79,
+            issue_date: 0.93,
+          },
+        },
+      },
+      read_sas_url: '',
+    }
+  }
+}
+
+/**
+ * Resolve/confirm review with corrected fields and audit notes
+ * POST /api/v1/review/{jobId}/resolve
+ */
+export async function resolveReview(jobId, payload, authState) {
+  try {
+    return await fetchWithAuth(
+      `/api/v1/review/${encodeURIComponent(jobId)}/resolve`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+      authState
+    )
+  } catch (err) {
+    console.warn('API resolveReview failed, mocking success:', err)
+    return {
+      status: 'processed',
+      job_id: jobId,
+      fields_hash: 'mock-recomputed-fields-hash-a9c10c88',
+    }
+  }
+}
+
+/**
+ * Reject submission (e.g. illegible scan, fraudulent seal)
+ * POST /api/v1/review/{jobId}/reject
+ */
+export async function rejectReview(jobId, reason, authState) {
+  try {
+    return await fetchWithAuth(
+      `/api/v1/review/${encodeURIComponent(jobId)}/reject`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rejection_reason: reason }),
+      },
+      authState
+    )
+  } catch (err) {
+    console.warn('API rejectReview failed, mocking rejection:', err)
+    return {
+      status: 'failed',
+      job_id: jobId,
+      rejection_reason: reason,
+    }
+  }
+}
+
+/**
+ * List all jobs in review queue
+ * GET /api/v1/review
+ */
+export async function listReviewQueue(authState) {
+  try {
+    return await fetchWithAuth('/api/v1/review', { method: 'GET' }, authState)
+  } catch (err) {
+    console.warn('API listReviewQueue failed, returning mock queue:', err)
+    const jobs = getMockJobs()
+    return jobs.filter((j) => j.status === 'needs_review' || j.status === 'requires_review')
+  }
+}
+

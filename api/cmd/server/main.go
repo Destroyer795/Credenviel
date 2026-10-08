@@ -53,6 +53,7 @@ func run(ctx context.Context, getenv func(string) string) error {
 
 	var store storage.Store
 	var signer storage.UploadSigner
+	var readSigner storage.ReadSigner
 
 	if cfg.StoreBackend == "blob" {
 		azureStore, err := storage.NewAzureBlobStore(cfg.StorageAccountName, cfg.AzureClientID)
@@ -66,16 +67,19 @@ func run(ctx context.Context, getenv func(string) string) error {
 			return fmt.Errorf("azure blob signer initialization failed: %w", err)
 		}
 		signer = azureSigner
+		readSigner = azureSigner
 	} else {
 		localStore, err := storage.NewLocalFS(cfg.LocalStorageRoot)
 		if err != nil {
 			return fmt.Errorf("storage initialization failed: %w", err)
 		}
 		store = localStore
-		signer = storage.NewLocalSigner(cfg.PublicBaseURL)
+		localSigner := storage.NewLocalSigner(cfg.PublicBaseURL)
+		signer = localSigner
+		readSigner = localSigner
 	}
 
-	srv := server.NewServer(cfg, database, database, store, signer)
+	srv := server.NewServer(cfg, database, database, database, store, signer, readSigner)
 
 	addr := net.JoinHostPort(cfg.Host, cfg.Port)
 	httpServer := &http.Server{
