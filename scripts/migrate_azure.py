@@ -100,15 +100,34 @@ def main():
         combined_sql += f"\n-- {mig.name} --\n"
         combined_sql += mig.read_text(encoding="utf-8") + "\n"
 
-    # Check if docker is available
+    # Check tools available: native psql -> docker psql -> psycopg
+    psql_bin = shutil.which("psql")
     docker_bin = shutil.which("docker")
     docker_available = False
-    if docker_bin:
-        # Check if docker daemon is reachable
+    if docker_bin and not psql_bin:
         chk = subprocess.run([docker_bin, "info"], capture_output=True)
         docker_available = (chk.returncode == 0)
 
-    if docker_available:
+    if psql_bin:
+        print("[*] Running native psql...")
+        env = os.environ.copy()
+        env["PGPASSWORD"] = cfg["pg_password"]
+        cmd = [
+            psql_bin,
+            "-h", target_host,
+            "-p", "5432",
+            "-U", target_user,
+            "-d", target_db,
+            "-v", "ON_ERROR_STOP=1",
+            "--set=sslmode=require",
+        ]
+        res = subprocess.run(cmd, input=combined_sql, text=True, capture_output=True, env=env)
+        if res.returncode != 0:
+            print("[!] Migration failed with psql:", file=sys.stderr)
+            print(res.stderr or res.stdout, file=sys.stderr)
+            sys.exit(1)
+        print(res.stdout)
+    elif docker_available:
         print("[*] Running psql via docker (postgres:16)...")
         docker_cmd = [
             docker_bin, "run", "--rm", "-i",
@@ -129,10 +148,15 @@ def main():
             sys.exit(1)
         print(res.stdout)
     else:
-        # Fallback to python psycopg if docker daemon is not active
-        print("[*] Docker not available; applying migrations using psycopg...")
+        print("[*] Applying migrations using psycopg...")
         try:
             import psycopg
+        except ImportError:
+            print("[*] Installing psycopg[binary]...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "psycopg[binary]"], check=True)
+            import psycopg
+
+        try:
             conn_str = f"postgresql://{target_user}:{cfg['pg_password']}@{target_host}:5432/{target_db}?sslmode=require"
             with psycopg.connect(conn_str, autocommit=True) as conn:
                 with conn.cursor() as cur:
