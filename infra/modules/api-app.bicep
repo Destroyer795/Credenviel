@@ -5,7 +5,7 @@
 targetScope = 'resourceGroup'
 
 @description('Azure region')
-param location string = resourceGroup().location
+param location string = 'eastasia'
 
 @description('Tags applied to every resource')
 param tags object = {
