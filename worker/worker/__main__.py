@@ -13,7 +13,7 @@ from credenviel_shared.local_queue import LocalQueue
 from credenviel_shared.service_bus_queue import ServiceBusQueue
 from credenviel_shared.store import LocalFileStore
 from worker.config import load_config
-from worker.extractor import StubExtractor
+from worker.extractor import StubExtractor, get_extractor
 from worker.processor import WorkerProcessor
 
 logging.basicConfig(
@@ -97,14 +97,21 @@ def main() -> None:
     args = parser.parse_args()
 
     # Spec § 5.7: --stub-extractor is required; exit code 2 without it
-    if not args.stub_extractor:
-        logger.error("--stub-extractor flag is required in Phase 1")
+    config = load_config()
+
+    # Require --stub-extractor unless DOC_INTELLIGENCE_ENDPOINT is configured
+    if not args.stub_extractor and not config.get("doc_intelligence_endpoint"):
+        logger.error("--stub-extractor flag is required when DOC_INTELLIGENCE_ENDPOINT is not configured")
         sys.exit(2)
 
-    logger.info("Running with STUB extractor (load-test mode)")
-    logger.info("Stub extractor profile: %s", args.stub_profile)
+    use_stub = args.stub_extractor or not bool(config.get("doc_intelligence_endpoint"))
+    extractor = get_extractor(config, use_stub=use_stub, stub_profile=args.stub_profile)
 
-    config = load_config()
+    if use_stub:
+        logger.info("Running with STUB extractor (load-test mode)")
+        logger.info("Stub extractor profile: %s", args.stub_profile)
+    else:
+        logger.info("Running with Azure Document Intelligence extractor")
 
     # Signal handling for clean exit on SIGTERM/SIGINT
     running = True
@@ -125,8 +132,6 @@ def main() -> None:
         )
     else:
         store = LocalFileStore(config["local_storage_root"])
-
-    extractor = StubExtractor(profile=args.stub_profile)
 
     with psycopg.connect(config["database_url"], autocommit=True) as conn:
         if config["queue_backend"] == "servicebus":

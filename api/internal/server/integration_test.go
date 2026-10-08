@@ -167,7 +167,7 @@ func setupIntegrationServer(t *testing.T) (*Server, *db.DB, *storage.LocalFS, st
 	}
 
 	signer := storage.NewLocalSigner(cfg.PublicBaseURL)
-	srv := NewServer(cfg, database, database, store, signer)
+	srv := NewServer(cfg, database, database, database, store, signer, signer)
 
 	return srv, database, store, tmpDir
 }

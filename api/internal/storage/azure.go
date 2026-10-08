@@ -42,6 +42,10 @@ func NewAzureBlobStore(accountName, clientID string) (*AzureBlobStore, error) {
 }
 
 func (s *AzureBlobStore) splitKey(key string) (string, string, error) {
+	return splitBlobKey(key)
+}
+
+func splitBlobKey(key string) (string, string, error) {
 	clean := strings.Trim(strings.ReplaceAll(key, "\\", "/"), "/")
 	parts := strings.SplitN(clean, "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
@@ -194,6 +198,62 @@ func (s *AzureBlobSigner) SignUpload(jobID, filename string, ttl time.Duration) 
 		},
 	}, nil
 }
+
+// SignRead generates a scoped 15-minute user-delegation read SAS for side-by-side document preview.
+func (s *AzureBlobSigner) SignRead(blobKey string, ttl time.Duration) (string, error) {
+	container, blobPath, err := splitBlobKey(blobKey)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now().UTC()
+	start := now.Add(-5 * time.Minute)
+	expiry := now.Add(ttl)
+
+	startStr := start.Format(sas.TimeFormat)
+	expiryStr := expiry.Format(sas.TimeFormat)
+
+	keyInfo := service.KeyInfo{
+		Start:  &startStr,
+		Expiry: &expiryStr,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	udc, err := s.client.ServiceClient().GetUserDelegationCredential(ctx, keyInfo, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get user delegation credential for read sas: %w", err)
+	}
+
+	permissions := sas.BlobPermissions{
+		Read: true,
+	}
+
+	sigValues := sas.BlobSignatureValues{
+		Protocol:      sas.ProtocolHTTPS,
+		StartTime:     start,
+		ExpiryTime:    expiry,
+		Permissions:   permissions.String(),
+		ContainerName: container,
+		BlobName:      blobPath,
+	}
+
+	sasParams, err := sigValues.SignWithUserDelegation(udc)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign user delegation read SAS: %w", err)
+	}
+
+	readURL := fmt.Sprintf("https://%s.blob.core.windows.net/%s/%s?%s",
+		s.accountName,
+		container,
+		url.PathEscape(blobPath),
+		sasParams.Encode(),
+	)
+
+	return readURL, nil
+}
+
 
 func newBlobClient(accountName, clientID string) (*azblob.Client, error) {
 	if clientID != "" && os.Getenv("AZURE_CLIENT_ID") == "" {

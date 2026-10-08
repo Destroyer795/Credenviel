@@ -8,6 +8,7 @@ export function StatusBadge({ status }) {
     queued: 'Queued',
     processing: 'OCR Processing',
     processed: 'Digitized & Issued',
+    needs_review: 'Requires Review',
     requires_review: 'Requires Review',
     failed: 'Failed',
   }

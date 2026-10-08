@@ -5,39 +5,56 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Destroyer795/Credenviel/api/internal/auth"
 	"github.com/Destroyer795/Credenviel/api/internal/config"
 	"github.com/Destroyer795/Credenviel/api/internal/jobs"
+	"github.com/Destroyer795/Credenviel/api/internal/normalizer"
+	"github.com/Destroyer795/Credenviel/api/internal/records"
 	"github.com/Destroyer795/Credenviel/api/internal/storage"
 )
 
 type Server struct {
-	cfg       *config.Config
-	userStore auth.UserStore
-	jobRepo   jobs.Repository
-	store     storage.Store
-	signer    storage.UploadSigner
-	mux       *http.ServeMux
+	cfg        *config.Config
+	userStore  auth.UserStore
+	jobRepo    jobs.Repository
+	recordRepo records.Repository
+	store      storage.Store
+	signer     storage.UploadSigner
+	readSigner storage.ReadSigner
+	mux        *http.ServeMux
 }
 
 func NewServer(
 	cfg *config.Config,
 	userStore auth.UserStore,
 	jobRepo jobs.Repository,
+	recordRepo records.Repository,
 	store storage.Store,
 	signer storage.UploadSigner,
+	readSigner storage.ReadSigner,
 ) *Server {
+	// If readSigner is nil but signer implements ReadSigner, automatically type-assert
+	if readSigner == nil && signer != nil {
+		if rs, ok := signer.(storage.ReadSigner); ok {
+			readSigner = rs
+		}
+	}
+
 	s := &Server{
-		cfg:       cfg,
-		userStore: userStore,
-		jobRepo:   jobRepo,
-		store:     store,
-		signer:    signer,
-		mux:       http.NewServeMux(),
+		cfg:        cfg,
+		userStore:  userStore,
+		jobRepo:    jobRepo,
+		recordRepo: recordRepo,
+		store:      store,
+		signer:     signer,
+		readSigner: readSigner,
+		mux:        http.NewServeMux(),
 	}
 
 	s.routes()
@@ -75,12 +92,19 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/v1/jobs", authMiddleware(http.HandlerFunc(s.handleListJobs)))
 	s.mux.Handle("GET /api/v1/jobs/{id}", authMiddleware(http.HandlerFunc(s.handleGetJob)))
 
+	// Issuer review routes
+	s.mux.Handle("GET /api/v1/review", authMiddleware(http.HandlerFunc(s.handleListReviewQueue)))
+	s.mux.Handle("GET /api/v1/review/{id}", authMiddleware(http.HandlerFunc(s.handleGetReviewJob)))
+	s.mux.Handle("POST /api/v1/review/{id}/resolve", authMiddleware(http.HandlerFunc(s.handleResolveReview)))
+	s.mux.Handle("POST /api/v1/review/{id}/reject", authMiddleware(http.HandlerFunc(s.handleRejectReview)))
+
 	// Internal notify endpoint (secret header protected)
 	s.mux.HandleFunc("POST /internal/v1/jobs/{id}/notify", s.handleInternalNotify)
 
-	// Dev upload endpoint (only registered when AUTH_MODE=dev)
+	// Dev endpoints (only registered when AUTH_MODE=dev)
 	if s.cfg.AuthMode == "dev" {
 		s.mux.HandleFunc("PUT /dev/upload/{job_id}/{file}", s.handleDevUpload)
+		s.mux.HandleFunc("GET /dev/preview/{path...}", s.handleDevPreview)
 	}
 }
 
@@ -294,3 +318,270 @@ func (s *Server) handleInternalNotify(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[INTERNAL NOTIFY] job_id=%s body=%v", jobID, body)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (s *Server) handleListReviewQueue(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	if user.Role != "issuer" {
+		http.Error(w, `{"error":"forbidden","message":"only issuers can access the review station"}`, http.StatusForbidden)
+		return
+	}
+
+	filter := jobs.ListFilter{
+		Status:   "needs_review",
+		IsIssuer: true,
+	}
+	list, err := s.jobRepo.List(r.Context(), filter)
+	if err != nil {
+		http.Error(w, `{"error":"internal_server_error"}`, http.StatusInternalServerError)
+		return
+	}
+	if list == nil {
+		list = []*jobs.Job{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(list)
+}
+
+func (s *Server) handleGetReviewJob(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	if user.Role != "issuer" {
+		http.Error(w, `{"error":"forbidden","message":"only issuers can access the review station"}`, http.StatusForbidden)
+		return
+	}
+
+	jobID := r.PathValue("id")
+	if jobID == "" {
+		http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+		return
+	}
+
+	job, err := s.jobRepo.Get(r.Context(), jobID)
+	if err != nil {
+		if errors.Is(err, jobs.ErrNotFound) {
+			http.Error(w, `{"error":"not_found","message":"job not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"internal_server_error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	record, err := s.recordRepo.GetByJobID(r.Context(), jobID)
+	if err != nil && !errors.Is(err, records.ErrNotFound) {
+		http.Error(w, `{"error":"internal_server_error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var previewURL string
+	if s.readSigner != nil && job.BlobKey != "" {
+		previewURL, _ = s.readSigner.SignRead(job.BlobKey, 15*time.Minute)
+	}
+
+	resp := map[string]any{
+		"job":          job,
+		"record":       record,
+		"read_sas_url": previewURL,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+type resolveReviewRequest struct {
+	Name           *string `json:"name"`
+	RollNumber     *string `json:"roll_number"`
+	RegisterNumber *string `json:"register_number"`
+	Degree         *string `json:"degree"`
+	Marks          any     `json:"marks"`
+	MarksJSON      any     `json:"marks_json"`
+	CGPA           *string `json:"cgpa"`
+	IssueDate      *string `json:"issue_date"`
+	Notes          string  `json:"notes"`
+}
+
+func (s *Server) handleResolveReview(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	if user.Role != "issuer" {
+		http.Error(w, `{"error":"forbidden","message":"only issuers can resolve reviews"}`, http.StatusForbidden)
+		return
+	}
+
+	jobID := r.PathValue("id")
+	if jobID == "" {
+		http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+		return
+	}
+
+	var req resolveReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"bad_request","message":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+
+	marks := req.Marks
+	if marks == nil {
+		marks = req.MarksJSON
+	}
+
+	fieldsMap := map[string]any{
+		"name":            req.Name,
+		"roll_number":     req.RollNumber,
+		"register_number": req.RegisterNumber,
+		"degree":          req.Degree,
+		"marks_json":      marks,
+		"cgpa":            req.CGPA,
+		"issue_date":      req.IssueDate,
+	}
+
+	fieldsHash, err := normalizer.ComputeFieldsHash(fieldsMap)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"bad_request","message":"normalization failed: %s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	existingRecord, _ := s.recordRepo.GetByJobID(r.Context(), jobID)
+	diff := map[string]any{
+		"notes":       req.Notes,
+		"resolved_by": user.ID,
+		"resolved_at": time.Now().UTC().Format(time.RFC3339),
+	}
+	if existingRecord != nil {
+		diff["prior"] = map[string]any{
+			"name":            existingRecord.Name,
+			"roll_number":     existingRecord.RollNumber,
+			"register_number": existingRecord.RegisterNumber,
+			"degree":          existingRecord.Degree,
+			"marks_json":      existingRecord.MarksJSON,
+			"cgpa":            existingRecord.CGPA,
+			"issue_date":      existingRecord.IssueDate,
+			"fields_hash":     existingRecord.FieldsHash,
+		}
+	}
+
+	resolved := records.ResolvedFields{
+		Name:           req.Name,
+		RollNumber:     req.RollNumber,
+		RegisterNumber: req.RegisterNumber,
+		Degree:         req.Degree,
+		MarksJSON:      marks,
+		CGPA:           req.CGPA,
+		IssueDate:      req.IssueDate,
+	}
+
+	if err := s.recordRepo.Resolve(r.Context(), jobID, resolved, fieldsHash, diff, user.ID); err != nil {
+		if errors.Is(err, jobs.ErrNotFound) {
+			http.Error(w, `{"error":"not_found","message":"job not found"}`, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, records.ErrInvalidStatus) {
+			http.Error(w, `{"error":"conflict","message":"job is not in needs_review status"}`, http.StatusConflict)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"internal_server_error","message":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	resp := map[string]any{
+		"status":      "processed",
+		"job_id":      jobID,
+		"fields_hash": fieldsHash,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+type rejectReviewRequest struct {
+	RejectionReason string `json:"rejection_reason"`
+}
+
+func (s *Server) handleRejectReview(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	if user.Role != "issuer" {
+		http.Error(w, `{"error":"forbidden","message":"only issuers can reject reviews"}`, http.StatusForbidden)
+		return
+	}
+
+	jobID := r.PathValue("id")
+	if jobID == "" {
+		http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+		return
+	}
+
+	var req rejectReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"bad_request","message":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+
+	reason := strings.TrimSpace(req.RejectionReason)
+	if reason == "" {
+		http.Error(w, `{"error":"bad_request","message":"rejection_reason is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := s.recordRepo.Reject(r.Context(), jobID, reason, user.ID); err != nil {
+		if errors.Is(err, jobs.ErrNotFound) {
+			http.Error(w, `{"error":"not_found","message":"job not found"}`, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, records.ErrInvalidStatus) {
+			http.Error(w, `{"error":"conflict","message":"job is not in needs_review status"}`, http.StatusConflict)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"internal_server_error","message":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	resp := map[string]any{
+		"status":           "failed",
+		"job_id":           jobID,
+		"rejection_reason": reason,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleDevPreview(w http.ResponseWriter, r *http.Request) {
+	blobPath := r.PathValue("path")
+	if blobPath == "" {
+		http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+		return
+	}
+
+	rc, err := s.store.Open(r.Context(), blobPath)
+	if err != nil {
+		http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+		return
+	}
+	defer rc.Close()
+
+	lower := strings.ToLower(blobPath)
+	if strings.HasSuffix(lower, ".pdf") {
+		w.Header().Set("Content-Type", "application/pdf")
+	} else if strings.HasSuffix(lower, ".png") {
+		w.Header().Set("Content-Type", "image/png")
+	} else if strings.HasSuffix(lower, ".jpg") || strings.HasSuffix(lower, ".jpeg") {
+		w.Header().Set("Content-Type", "image/jpeg")
+	} else {
+		w.Header().Set("Content-Type", "application/octet-stream")
+	}
+
+	io.Copy(w, rc)
+}
+

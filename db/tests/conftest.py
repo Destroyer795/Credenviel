@@ -81,18 +81,21 @@ def db_conn(test_db):
 
 @pytest.fixture
 def fresh_schema(db_conn):
-    """Apply migrations 001+002 on a clean database, yield connection, then tear down."""
+    """Apply migrations 001+002+003 on a clean database, yield connection, then tear down."""
     # Drop everything first (clean slate)
+    db_conn.execute(_read_sql(MIGRATIONS_DIR, "003_review_rejection_guard.down.sql"))
     db_conn.execute(_read_sql(MIGRATIONS_DIR, "002_status_guard.down.sql"))
     db_conn.execute(_read_sql(MIGRATIONS_DIR, "001_initial_schema.down.sql"))
 
     # Apply up migrations
     db_conn.execute(_read_sql(MIGRATIONS_DIR, "001_initial_schema.up.sql"))
     db_conn.execute(_read_sql(MIGRATIONS_DIR, "002_status_guard.up.sql"))
+    db_conn.execute(_read_sql(MIGRATIONS_DIR, "003_review_rejection_guard.up.sql"))
 
     yield db_conn
 
     # Tear down
+    db_conn.execute(_read_sql(MIGRATIONS_DIR, "003_review_rejection_guard.down.sql"))
     db_conn.execute(_read_sql(MIGRATIONS_DIR, "002_status_guard.down.sql"))
     db_conn.execute(_read_sql(MIGRATIONS_DIR, "001_initial_schema.down.sql"))
 

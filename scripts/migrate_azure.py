@@ -63,6 +63,7 @@ def main():
     migrations = [
         REPO_ROOT / "db" / "migrations" / "001_initial_schema.up.sql",
         REPO_ROOT / "db" / "migrations" / "002_status_guard.up.sql",
+        REPO_ROOT / "db" / "migrations" / "003_review_rejection_guard.up.sql",
     ]
 
     for mig in migrations:

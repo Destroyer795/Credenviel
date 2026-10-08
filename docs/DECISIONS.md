@@ -67,21 +67,23 @@
 | D-045 | Entra ID Tenant Strategy (Personal Tenant Primary, Mock JWT Fallback) | PROPOSED | University tenant blocks app registrations (D-031). Solution: Register a free personal developer Entra tenant for authentic Microsoft OIDC/JWKS token validation (`https://login.microsoftonline.com/{tenantId}/v2.0`). Existing Azure resources remain in `rg-credenviel-dev`. In parallel, provide a self-issued RSA/ECDSA JWT validator behind the same `IdentitySource` interface for offline/local CI tests. Resolves Q-010. |
 | D-046 | Frontend Architecture & Hosting via Azure Static Web Apps | PROPOSED | React Vite frontend is hosted on Azure Static Web Apps (Free tier) in `eastasia`, providing global CDN edge distribution, automatic TLS certificates, client-side SPA fallback routing (`staticwebapp.config.json`), and native GitHub Actions CI/CD integration. Supersedes manual Blob Storage `$web` hosting. |
 | D-047 | Passwordless GitHub Actions CI/CD via Federated Identity Credentials | PROPOSED | GitHub Actions authenticates to Azure keylessly using OpenID Connect (OIDC) through a Federated Identity Credential configured on the User-Assigned Managed Identity (`Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials`). Avoids requiring Entra ID tenant-level `Application.ReadWrite.All` permissions. |
+| D-048 | Human-in-the-Loop Review, Rejection, and Canonical Hash Recomputation | PROPOSED | (1) `POST /api/v1/review/:jobId/resolve` accepts corrected fields, recomputes canonical `fields_hash` in the Go API via the deterministic normalization algorithm, computes the audit diff against prior values, records diff in `records.corrections_json`, sets `verified_by_issuer = true`, updates `reviewed_by` and `reviewed_at`, and transitions `jobs.status` from `needs_review` to `processed`. (2) `POST /api/v1/review/:jobId/reject` accepts `{ "rejection_reason": string }`, transitions `jobs.status` to `failed` with `failure_reason`, and records `{ rejection_reason, rejected_by, rejected_at }` in `records.corrections_json`. (3) PostgreSQL status transition trigger updated in migration 003 to allow `needs_review -> failed`. Resolves Q-001, Q-002. |
+| D-049 | Azure Document Intelligence Integration with Deterministic Stub Fallback | PROPOSED | (1) Document extractor integrates Azure Document Intelligence custom model (`POST /documentModels/{modelId}:analyze`) with per-field and per-cell tabular confidence parsing. (2) When Document Intelligence credentials or custom model are not provided, worker defaults cleanly to deterministic `StubExtractor` with tunable `--stub-profile` (high/low), ensuring local development, CI, and burst load tests run without Azure Cognitive Services. (3) `CONFIDENCE_THRESHOLD` (default 0.85) is configurable via environment variable; any scalar field or marks table cell < threshold routes the job to `needs_review`. (4) Real OCR normalization fallback: if extracted date or numeric values cannot be parsed cleanly, the raw string is preserved, confidence marked 0.0, and the job routed to `needs_review` rather than failing outright. Resolves Q-008, Q-009. |
 
 
 ## Open Questions (Phase 1)
 
-| # | Question | Deferred to |
+| # | Question | Deferred to / Status |
 |---|---|---|
-| Q-001 | Issuer rejection semantics (`needs_review → failed`, `processed → failed`): who writes, what audit trail? | Phase 4 |
-| Q-002 | Who recomputes `fields_hash` after an issuer correction: DESIGN says the worker, CONTRACTS §3 says the Go API. | Before Phase 4 |
-| Q-003 | Go/Python normalization parity (`lower()` vs `ToLower`, Unicode `\s`, HTML escaping): must be resolved before Go implements the normalizer. | Before Phase 5 |
+| Q-001 | Issuer rejection semantics (`needs_review → failed`, `processed → failed`): who writes, what audit trail? | Resolved (D-048) |
+| Q-002 | Who recomputes `fields_hash` after an issuer correction: DESIGN says the worker, CONTRACTS §3 says the Go API. | Resolved (D-048: Go API recomputes) |
+| Q-003 | Go/Python normalization parity (`lower()` vs `ToLower`, Unicode `\s`, HTML escaping): must be resolved before Go implements the normalizer. | Resolved (D-048: parity verified against 13 shared vectors) |
 | Q-004 | Lost send: if the Function's queue send keeps failing, the job stays `queued` with no message (outbox or sweeper needed). | Phase 6 |
 | Q-005 | Notify is not repeated if a worker crashes after committing but before completing the message. | Phase 5 reconciliation |
 | Q-006 | Phase 2 packaging: the worker Docker build context must be the repo root to include `shared/`; the Function needs `shared/` vendored. | Phase 2 |
 | Q-007 | CONTRACTS says the internal endpoint is protected by "internal ingress"; ingress is configured per app, not per route, so the shared secret may be the only protection. | Phase 2/3 |
-| Q-008 | "Any single cell below threshold → review" may flag too many documents on large marksheets; treat the threshold as tunable. | Phase 4 |
-| Q-009 | Real OCR output may fail normalization (non-ISO date, non-numeric marks): route to `needs_review` rather than `failed` | Phase 4 |
+| Q-008 | "Any single cell below threshold → review" may flag too many documents on large marksheets; treat the threshold as tunable. | Resolved (D-049: `CONFIDENCE_THRESHOLD` env var) |
+| Q-009 | Real OCR output may fail normalization (non-ISO date, non-numeric marks): route to `needs_review` rather than `failed` | Resolved (D-049: raw string retained, routes to review) |
 | Q-010 | Entra tenant strategy for Phase 3: resolved by D-045 (personal developer tenant primary, self-issued JWT fallback). | Resolved (D-045) |
 
 ---

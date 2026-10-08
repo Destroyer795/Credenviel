@@ -2,15 +2,18 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Destroyer795/Credenviel/api/internal/auth"
 	"github.com/Destroyer795/Credenviel/api/internal/jobs"
+	"github.com/Destroyer795/Credenviel/api/internal/records"
 )
 
 // DB encapsulates the pgx connection pool and implements repositories.
@@ -169,3 +172,175 @@ func (d *DB) List(ctx context.Context, filter jobs.ListFilter) ([]*jobs.Job, err
 
 	return result, nil
 }
+
+// GetByJobID fetches the record associated with a job.
+func (d *DB) GetByJobID(ctx context.Context, jobID string) (*records.Record, error) {
+	query := `
+		SELECT id, job_id, name, roll_number, register_number, degree,
+		       marks_json, cgpa::text, issue_date::text, confidence_json,
+		       source_hash, fields_hash, public_verification_id, verified_by_issuer,
+		       reviewed_by, reviewed_at, corrections_json, created_at
+		FROM records
+		WHERE job_id = $1
+	`
+
+	var r records.Record
+	var marksBytes, confBytes, corrBytes []byte
+
+	err := d.pool.QueryRow(ctx, query, jobID).Scan(
+		&r.ID,
+		&r.JobID,
+		&r.Name,
+		&r.RollNumber,
+		&r.RegisterNumber,
+		&r.Degree,
+		&marksBytes,
+		&r.CGPA,
+		&r.IssueDate,
+		&confBytes,
+		&r.SourceHash,
+		&r.FieldsHash,
+		&r.PublicVerificationID,
+		&r.VerifiedByIssuer,
+		&r.ReviewedBy,
+		&r.ReviewedAt,
+		&corrBytes,
+		&r.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, records.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to get record: %w", err)
+	}
+
+	if len(marksBytes) > 0 {
+		_ = json.Unmarshal(marksBytes, &r.MarksJSON)
+	}
+	if len(confBytes) > 0 {
+		_ = json.Unmarshal(confBytes, &r.ConfidenceJSON)
+	}
+	if len(corrBytes) > 0 {
+		_ = json.Unmarshal(corrBytes, &r.CorrectionsJSON)
+	}
+
+	return &r, nil
+}
+
+// Resolve confirms or corrects fields on a record, re-seals fields_hash, updates status to processed.
+func (d *DB) Resolve(ctx context.Context, jobID string, resolved records.ResolvedFields, fieldsHash string, diff map[string]any, reviewerID string) error {
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var status string
+	err = tx.QueryRow(ctx, "SELECT status FROM jobs WHERE id = $1 FOR UPDATE", jobID).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return jobs.ErrNotFound
+		}
+		return fmt.Errorf("failed to lock job: %w", err)
+	}
+
+	if status != "needs_review" {
+		return records.ErrInvalidStatus
+	}
+
+	marksJSON, err := json.Marshal(resolved.MarksJSON)
+	if err != nil {
+		return fmt.Errorf("failed to marshal marks_json: %w", err)
+	}
+
+	diffJSON, err := json.Marshal(diff)
+	if err != nil {
+		return fmt.Errorf("failed to marshal corrections diff: %w", err)
+	}
+
+	updateRecordQuery := `
+		UPDATE records
+		SET name = $2,
+		    roll_number = $3,
+		    register_number = $4,
+		    degree = $5,
+		    marks_json = $6::jsonb,
+		    cgpa = $7::numeric,
+		    issue_date = $8::date,
+		    fields_hash = $9,
+		    verified_by_issuer = true,
+		    reviewed_by = $10,
+		    reviewed_at = clock_timestamp(),
+		    corrections_json = coalesce(corrections_json, '{}'::jsonb) || $11::jsonb
+		WHERE job_id = $1
+	`
+	_, err = tx.Exec(ctx, updateRecordQuery,
+		jobID,
+		resolved.Name,
+		resolved.RollNumber,
+		resolved.RegisterNumber,
+		resolved.Degree,
+		marksJSON,
+		resolved.CGPA,
+		resolved.IssueDate,
+		fieldsHash,
+		reviewerID,
+		diffJSON,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update record: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, "UPDATE jobs SET status = 'processed' WHERE id = $1", jobID)
+	if err != nil {
+		return fmt.Errorf("failed to update job status: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+// Reject sets job status to failed and updates audit trail in record.
+func (d *DB) Reject(ctx context.Context, jobID string, reason string, reviewerID string) error {
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var status string
+	err = tx.QueryRow(ctx, "SELECT status FROM jobs WHERE id = $1 FOR UPDATE", jobID).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return jobs.ErrNotFound
+		}
+		return fmt.Errorf("failed to lock job: %w", err)
+	}
+
+	if status != "needs_review" {
+		return records.ErrInvalidStatus
+	}
+
+	_, err = tx.Exec(ctx, "UPDATE jobs SET status = 'failed', failure_reason = $2 WHERE id = $1", jobID, reason)
+	if err != nil {
+		return fmt.Errorf("failed to update job status: %w", err)
+	}
+
+	auditPayload := map[string]any{
+		"rejection_reason": reason,
+		"rejected_by":      reviewerID,
+		"rejected_at":      time.Now().UTC().Format(time.RFC3339),
+	}
+	auditJSON, _ := json.Marshal(auditPayload)
+
+	updateRecordQuery := `
+		UPDATE records
+		SET reviewed_by = $2,
+		    reviewed_at = clock_timestamp(),
+		    corrections_json = coalesce(corrections_json, '{}'::jsonb) || $3::jsonb
+		WHERE job_id = $1
+	`
+	_, _ = tx.Exec(ctx, updateRecordQuery, jobID, reviewerID, auditJSON)
+
+	return tx.Commit(ctx)
+}
+
