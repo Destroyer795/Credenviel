@@ -16,18 +16,21 @@ import (
 	"github.com/Destroyer795/Credenviel/api/internal/jobs"
 	"github.com/Destroyer795/Credenviel/api/internal/normalizer"
 	"github.com/Destroyer795/Credenviel/api/internal/records"
+	"github.com/Destroyer795/Credenviel/api/internal/signalr"
 	"github.com/Destroyer795/Credenviel/api/internal/storage"
 )
 
 type Server struct {
-	cfg        *config.Config
-	userStore  auth.UserStore
-	jobRepo    jobs.Repository
-	recordRepo records.Repository
-	store      storage.Store
-	signer     storage.UploadSigner
-	readSigner storage.ReadSigner
-	mux        *http.ServeMux
+	cfg         *config.Config
+	userStore   auth.UserStore
+	jobRepo     jobs.Repository
+	recordRepo  records.Repository
+	store       storage.Store
+	signer      storage.UploadSigner
+	readSigner  storage.ReadSigner
+	signalr     signalr.Client
+	rateLimiter *RateLimiter
+	mux         *http.ServeMux
 }
 
 func NewServer(
@@ -38,6 +41,7 @@ func NewServer(
 	store storage.Store,
 	signer storage.UploadSigner,
 	readSigner storage.ReadSigner,
+	sigClient ...signalr.Client,
 ) *Server {
 	// If readSigner is nil but signer implements ReadSigner, automatically type-assert
 	if readSigner == nil && signer != nil {
@@ -46,15 +50,30 @@ func NewServer(
 		}
 	}
 
+	var sig signalr.Client
+	if len(sigClient) > 0 && sigClient[0] != nil {
+		sig = sigClient[0]
+	} else if cfg != nil && cfg.SignalRURL != "" {
+		if azClient, err := signalr.NewAzureClient(cfg.SignalRURL, "credenviel"); err == nil {
+			sig = azClient
+		} else {
+			sig = signalr.NewDevClient()
+		}
+	} else {
+		sig = signalr.NewDevClient()
+	}
+
 	s := &Server{
-		cfg:        cfg,
-		userStore:  userStore,
-		jobRepo:    jobRepo,
-		recordRepo: recordRepo,
-		store:      store,
-		signer:     signer,
-		readSigner: readSigner,
-		mux:        http.NewServeMux(),
+		cfg:         cfg,
+		userStore:   userStore,
+		jobRepo:     jobRepo,
+		recordRepo:  recordRepo,
+		store:       store,
+		signer:      signer,
+		readSigner:  readSigner,
+		signalr:     sig,
+		rateLimiter: NewRateLimiter(30, 1*time.Minute),
+		mux:         http.NewServeMux(),
 	}
 
 	s.routes()
@@ -65,9 +84,24 @@ func (s *Server) Handler() http.Handler {
 	return s.mux
 }
 
+func (s *Server) RateLimiter() *RateLimiter {
+	return s.rateLimiter
+}
+
+func (s *Server) SetRateLimiter(rl *RateLimiter) {
+	s.rateLimiter = rl
+}
+
+func (s *Server) SignalR() signalr.Client {
+	return s.signalr
+}
+
 func (s *Server) routes() {
 	// Health check
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
+
+	// Public verification route (rate limited to 30 requests/minute per IP)
+	s.mux.Handle("GET /api/v1/verify/{id}", s.rateLimiter.Wrap(http.HandlerFunc(s.handlePublicVerify)))
 
 	var identitySource auth.IdentitySource
 	switch s.cfg.AuthMode {
@@ -97,6 +131,9 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/v1/review/{id}", authMiddleware(http.HandlerFunc(s.handleGetReviewJob)))
 	s.mux.Handle("POST /api/v1/review/{id}/resolve", authMiddleware(http.HandlerFunc(s.handleResolveReview)))
 	s.mux.Handle("POST /api/v1/review/{id}/reject", authMiddleware(http.HandlerFunc(s.handleRejectReview)))
+
+	// SignalR negotiate route (authenticated)
+	s.mux.Handle("POST /api/v1/signalr/negotiate", authMiddleware(http.HandlerFunc(s.handleSignalRNegotiate)))
 
 	// Internal notify endpoint (secret header protected)
 	s.mux.HandleFunc("POST /internal/v1/jobs/{id}/notify", s.handleInternalNotify)
@@ -316,6 +353,16 @@ func (s *Server) handleInternalNotify(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&body)
 
 	log.Printf("[INTERNAL NOTIFY] job_id=%s body=%v", jobID, body)
+
+	// Broadcast live status event to SignalR group for uploader
+	if s.signalr != nil && jobID != "" {
+		statusStr, _ := body["status"].(string)
+		job, err := s.jobRepo.Get(r.Context(), jobID)
+		if err == nil && job != nil {
+			_ = s.signalr.BroadcastJobStatus(r.Context(), job.UploaderID, jobID, statusStr, body)
+		}
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -493,6 +540,17 @@ func (s *Server) handleResolveReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.signalr != nil {
+		job, err := s.jobRepo.Get(r.Context(), jobID)
+		if err == nil && job != nil {
+			_ = s.signalr.BroadcastJobStatus(r.Context(), job.UploaderID, jobID, "processed", map[string]any{
+				"job_id":      jobID,
+				"status":      "processed",
+				"fields_hash": fieldsHash,
+			})
+		}
+	}
+
 	resp := map[string]any{
 		"status":      "processed",
 		"job_id":      jobID,
@@ -548,11 +606,86 @@ func (s *Server) handleRejectReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.signalr != nil {
+		job, err := s.jobRepo.Get(r.Context(), jobID)
+		if err == nil && job != nil {
+			_ = s.signalr.BroadcastJobStatus(r.Context(), job.UploaderID, jobID, "failed", map[string]any{
+				"job_id":           jobID,
+				"status":           "failed",
+				"rejection_reason": reason,
+			})
+		}
+	}
+
 	resp := map[string]any{
 		"status":           "failed",
 		"job_id":           jobID,
 		"rejection_reason": reason,
 	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handlePublicVerify(w http.ResponseWriter, r *http.Request) {
+	publicID := r.PathValue("id")
+	if publicID == "" {
+		http.Error(w, `{"error":"not_found","message":"verification record not found"}`, http.StatusNotFound)
+		return
+	}
+
+	rec, err := s.recordRepo.GetByPublicVerificationID(r.Context(), publicID)
+	if err != nil {
+		if errors.Is(err, records.ErrNotFound) {
+			http.Error(w, `{"error":"not_found","message":"verification record not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"internal_server_error","message":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	var stampedURL string
+	if s.readSigner != nil && rec.JobID != "" {
+		stampedKey := fmt.Sprintf("stamped-documents/%s/stamped_certificate.pdf", rec.JobID)
+		stampedURL, _ = s.readSigner.SignRead(stampedKey, 15*time.Minute)
+	}
+
+	resp := records.PublicVerification{
+		Verified:             true,
+		PublicVerificationID: rec.PublicVerificationID,
+		Name:                 rec.Name,
+		RollNumber:           rec.RollNumber,
+		Degree:               rec.Degree,
+		CGPA:                 rec.CGPA,
+		IssueDate:            rec.IssueDate,
+		SourceHash:           rec.SourceHash,
+		FieldsHash:           rec.FieldsHash,
+		VerifiedByIssuer:     rec.VerifiedByIssuer,
+		IssuedAt:             rec.CreatedAt,
+		StampedDocumentURL:   stampedURL,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleSignalRNegotiate(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	if s.signalr == nil {
+		http.Error(w, `{"error":"service_unavailable","message":"signalr service not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	resp, err := s.signalr.GenerateNegotiateResponse(r.Context(), user.ID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"internal_server_error","message":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }

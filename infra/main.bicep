@@ -79,6 +79,9 @@ param developerPrincipalId string = ''
 @description('Postgres admin password (read from PG_ADMIN_PASSWORD env). Empty means Postgres is not deployed.')
 param pgAdminPassword string = ''
 
+@description('Deploy Azure SignalR Service. False by default.')
+param deploySignalR bool = false
+
 @description('Developer public IP for Postgres firewall rule (read from DEV_IP env). Empty skips the rule.')
 param developerIp string = ''
 
@@ -281,8 +284,15 @@ module federatedIdentity 'modules/federated-identity.bicep' = if (!empty(githubR
   }
 }
 
-// Stubs for future phases:
-//   signalr             (Phase 5)
+// Azure SignalR Service (Phase 5)
+module signalR 'modules/signalr.bicep' = if (deploySignalR) {
+  name: 'signalr'
+  params: {
+    location: location
+    environment: environment
+    tags: tags
+  }
+}
 
 // ---- Outputs: names and ids needed later (no secrets) ----
 output logAnalyticsWorkspaceName string = monitoring.outputs.workspaceName
@@ -323,3 +333,6 @@ output apiUrl string = apiApp.?outputs.apiUrl ?? ''
 output staticWebAppName string = staticWebApp.?outputs.staticWebAppName ?? ''
 output staticWebAppUrl string = staticWebApp.?outputs.staticWebAppUrl ?? ''
 output federatedBranchCredentialId string = federatedIdentity.?outputs.federatedBranchCredentialId ?? ''
+// Phase 5 outputs
+output signalRName string = signalR.?outputs.signalRName ?? ''
+output signalRHostName string = signalR.?outputs.signalRHostName ?? ''

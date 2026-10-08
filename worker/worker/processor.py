@@ -16,6 +16,7 @@ from credenviel_shared.queue import Message, Queue
 from credenviel_shared.store import Store
 from worker.confidence import evaluate_confidence
 from worker.extractor import Extractor
+from worker.stamper import stamp_certificate
 
 logger = logging.getLogger("worker.processor")
 
@@ -223,6 +224,9 @@ class WorkerProcessor:
                             ),
                         )
 
+                        row = cur.fetchone()
+                        public_verification_id = str(row[0]) if row else ""
+
                         # Test hook after record upsert
                         if self.after_record_upsert:
                             self.after_record_upsert(job_id)
@@ -232,6 +236,24 @@ class WorkerProcessor:
                             "UPDATE jobs SET status = %s WHERE id = %s",
                             (final_status, job_id),
                         )
+
+            # Generate and upload QR-stamped PDF certificate copy to stamped-documents container
+            if final_status == "processed" and public_verification_id:
+                try:
+                    with self.store.open(blob_key) as f:
+                        raw_doc_bytes = f.read()
+                    stamped_pdf_bytes = stamp_certificate(
+                        raw_bytes=raw_doc_bytes,
+                        job_id=str(job_id),
+                        public_verification_id=public_verification_id,
+                        fields_hash=fields_hash,
+                        source_hash=source_hash,
+                    )
+                    stamped_key = f"stamped-documents/{job_id}/stamped_certificate.pdf"
+                    self.store.put(stamped_key, stamped_pdf_bytes)
+                    logger.info("Stored QR-stamped certificate copy at %s", stamped_key)
+                except Exception as e:
+                    logger.warning("Failed to stamp certificate for job %s: %s", job_id, e)
 
             # 6. Complete message
             self.queue.complete(message)
