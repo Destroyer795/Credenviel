@@ -5,10 +5,13 @@
 targetScope = 'resourceGroup'
 
 @description('Azure region')
-param location string
+param location string = resourceGroup().location
 
 @description('Tags applied to every resource')
-param tags object
+param tags object = {
+  project: 'credenviel'
+  env: 'dev'
+}
 
 @description('Environment name')
 #disable-next-line no-unused-params

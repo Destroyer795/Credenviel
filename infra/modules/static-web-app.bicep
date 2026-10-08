@@ -7,7 +7,10 @@ targetScope = 'resourceGroup'
 param location string = 'eastasia'
 
 @description('Tags applied to every resource')
-param tags object
+param tags object = {
+  project: 'credenviel'
+  env: 'dev'
+}
 
 @description('Name of the Static Web App')
 param staticWebAppName string = 'stapp-cred-${uniqueString(resourceGroup().id)}'
