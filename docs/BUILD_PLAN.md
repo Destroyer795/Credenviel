@@ -91,14 +91,14 @@ Container Apps environment, worker app with KEDA rule, Function app, Event Grid 
 **What:** Microsoft Entra ID integration, app roles (`Issuer`, `Student`), JWT validation middleware in Go API, JIT user provisioning, and scoped user-delegation SAS token generation (implemented in Phase 2; here it moves to the API's managed identity). Also: decide the Entra tenant strategy (app registration is blocked in the university tenant; see D-031 / Q-010) and deploy the API to Container Apps once real auth exists.
 
 **Acceptance tests:**
-- [ ] Unauthenticated requests to protected API endpoints return HTTP 401 Unauthorized.
-- [ ] JIT user provisioning creates or updates a `users` row on first authenticated API call.
-- [ ] Caller with `Student` app role can only view and manage their own jobs (`uploader_id`).
-- [ ] Caller with `Issuer` app role can view all institutional jobs, trigger bulk upload, and access review endpoints.
-- [ ] User-delegation SAS tokens are generated dynamically using API managed identity, scoped strictly to the target blob path with write-only permissions.
-- [ ] Entra tenant strategy decided and recorded (separate personal tenant, university IT, or self-issued JWT behind `IdentitySource`).
-- [ ] Go API deployed to Container Apps with real auth (never with `AUTH_MODE=dev`).
-- [ ] Dev-bypass configuration allows local development without requiring live Entra tokens.
+- [x] Unauthenticated requests to protected API endpoints return HTTP 401 Unauthorized (`api/internal/auth/jwt.go`, `server_test.go`).
+- [x] JIT user provisioning creates or updates a `users` row on first authenticated API call.
+- [x] Caller with `Student` app role can only view and manage their own jobs (`uploader_id`).
+- [x] Caller with `Issuer` app role can view all institutional jobs, trigger bulk upload, and access review endpoints.
+- [x] User-delegation SAS tokens are generated dynamically using API managed identity, scoped strictly to the target blob path with write-only permissions (`api/internal/storage/azure.go`).
+- [x] Entra tenant strategy decided and recorded (D-045 personal developer Entra tenant with mock JWT fallback; D-046 Azure Static Web Apps; D-047 GitHub Actions federated credential).
+- [ ] Go API deployed to Container Apps with real auth (`AUTH_MODE=entra` or `AUTH_MODE=jwt`).
+- [x] Dev-bypass configuration allows local development without requiring live Entra tokens (`AUTH_MODE=dev`).
 
 ---
 
