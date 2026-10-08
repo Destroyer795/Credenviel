@@ -29,10 +29,10 @@ export function Home() {
       {/* Hero Section */}
       <div className="hero-wrapper">
         <div className="hero-pill-tag">
-          <IconActivity size={14} color="var(--ice-blue)" />
+          <IconActivity size={14} color="var(--soft-blue)" />
           <span>Azure Zero-Trust Architecture</span>
-          <span style={{ color: 'var(--slate-blue-light)' }}>•</span>
-          <span style={{ color: apiOnline ? 'var(--status-emerald)' : apiOnline === false ? 'var(--status-rose)' : 'var(--slate-blue-light)' }}>
+          <span style={{ color: 'var(--border-slate)' }}>•</span>
+          <span style={{ color: apiOnline ? 'var(--status-emerald)' : apiOnline === false ? 'var(--status-rose)' : 'var(--slate-blue)' }}>
             {apiOnline ? 'Backend API Active' : apiOnline === false ? 'API Standby (Interactive Demo)' : 'Checking Health...'}
           </span>
         </div>
@@ -238,31 +238,31 @@ export function Home() {
       <div className="glass-panel" style={{ padding: '2.25rem', borderColor: 'var(--border-slate)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '2rem' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--ice-blue-light)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-              <IconLock size={16} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--slate-blue-dark)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+              <IconLock size={16} color="var(--slate-blue)" />
               <span>Azure Key Vault HSM</span>
             </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-sub)', lineHeight: 1.5 }}>
               Hardware security module key storage with role-based access control and managed identity isolation.
             </p>
           </div>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--ice-blue-light)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-              <IconCheckCircle size={16} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--slate-blue-dark)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+              <IconCheckCircle size={16} color="var(--status-emerald)" />
               <span>FERPA Privacy Preserved</span>
             </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-sub)', lineHeight: 1.5 }}>
               Public verification endpoints omit student registration numbers and granular grade rosters by design.
             </p>
           </div>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--ice-blue-light)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-              <IconSparkles size={16} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--slate-blue-dark)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+              <IconSparkles size={16} color="var(--soft-blue)" />
               <span>Zero Cloud Cost Trap</span>
             </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-sub)', lineHeight: 1.5 }}>
               Offline mocks and serverless scale-to-zero configurations protect cloud credits during idle periods.
             </p>
           </div>

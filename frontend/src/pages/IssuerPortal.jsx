@@ -72,58 +72,58 @@ export function IssuerPortal() {
       {/* KPI Metric Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
         <div className="glass-panel" id="metric-total">
-          <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue-light)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
             Total Submissions
           </div>
           <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>
             {totalCount}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', marginTop: '0.25rem' }}>
             Across all enrolled departments
           </div>
         </div>
 
-        <div className="glass-panel" id="metric-review" style={{ borderColor: reviewCount > 0 ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-subtle)' }}>
+        <div className="glass-panel" id="metric-review" style={{ borderColor: reviewCount > 0 ? 'rgba(217, 119, 6, 0.4)' : 'var(--border-subtle)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.74rem', color: 'var(--status-amber)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.74rem', color: 'var(--status-amber-text)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
               Requires Review
             </span>
             {reviewCount > 0 && <IconAlertTriangle size={15} color="var(--status-amber)" />}
           </div>
-          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--status-amber)', fontFamily: 'var(--font-mono)' }}>
+          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--status-amber-text)', fontFamily: 'var(--font-mono)' }}>
             {reviewCount}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', marginTop: '0.25rem' }}>
             Confidence below 0.85 threshold
           </div>
         </div>
 
         <div className="glass-panel" id="metric-processed">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.74rem', color: '#6ee7b7', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.74rem', color: 'var(--status-emerald-text)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
               Digitized & Issued
             </span>
             <IconCheckCircle size={15} color="var(--status-emerald)" />
           </div>
-          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: '#6ee7b7', fontFamily: 'var(--font-mono)' }}>
+          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--status-emerald-text)', fontFamily: 'var(--font-mono)' }}>
             {processedCount}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', marginTop: '0.25rem' }}>
             Sealed with cryptographic proofs
           </div>
         </div>
 
         <div className="glass-panel" id="metric-processing">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.74rem', color: 'var(--ice-blue-light)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.74rem', color: 'var(--soft-blue-dark)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
               In Active Pipeline
             </span>
-            <IconActivity size={15} color="var(--ice-blue)" />
+            <IconActivity size={15} color="var(--soft-blue)" />
           </div>
-          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--ice-blue-light)', fontFamily: 'var(--font-mono)' }}>
+          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--soft-blue-dark)', fontFamily: 'var(--font-mono)' }}>
             {processingCount}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', marginTop: '0.25rem' }}>
             In Service Bus / Container App
           </div>
         </div>

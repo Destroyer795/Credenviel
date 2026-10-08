@@ -205,7 +205,7 @@ export function ReviewScreen() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <Link to="/issuer" className="persona-btn">&larr; Back to Queue</Link>
             <h1 className="page-title" id="review-screen-title" style={{ fontSize: '1.75rem' }}>
-              <IconScale size={24} color="var(--ice-blue)" />
+              <IconScale size={24} color="var(--slate-blue)" />
               <span>Human-in-the-Loop Review Station</span>
             </h1>
           </div>
@@ -231,8 +231,8 @@ export function ReviewScreen() {
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Target Job:</span>
-            <code style={{ background: 'rgba(0,0,0,0.4)', padding: '0.2rem 0.6rem', borderRadius: 6, fontSize: '0.8rem', color: 'var(--ice-blue-light)' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>Target Job:</span>
+            <code style={{ background: 'var(--bg-frost)', padding: '0.2rem 0.6rem', borderRadius: 6, fontSize: '0.8rem', color: 'var(--slate-blue-dark)', border: '1px solid var(--border-subtle)' }}>
               {currentJobId ? `${currentJobId.slice(0, 16)}...` : 'demo-review'}
             </code>
           </div>
@@ -298,7 +298,7 @@ export function ReviewScreen() {
                 <button
                   type="button"
                   className={`persona-btn ${activeViewerTab === 'scan' ? 'active' : ''}`}
-                  style={activeViewerTab === 'scan' ? { background: 'var(--ice-blue-deep)', color: '#fff', borderColor: 'var(--ice-blue)' } : {}}
+                  style={activeViewerTab === 'scan' ? { background: 'var(--slate-blue)', color: '#fff', borderColor: 'var(--slate-blue)' } : {}}
                   onClick={() => setActiveViewerTab('scan')}
                 >
                   <IconFileText size={14} />
@@ -307,7 +307,7 @@ export function ReviewScreen() {
                 <button
                   type="button"
                   className={`persona-btn ${activeViewerTab === 'mock' ? 'active' : ''}`}
-                  style={activeViewerTab === 'mock' ? { background: 'var(--ice-blue-deep)', color: '#fff', borderColor: 'var(--ice-blue)' } : {}}
+                  style={activeViewerTab === 'mock' ? { background: 'var(--slate-blue)', color: '#fff', borderColor: 'var(--slate-blue)' } : {}}
                   onClick={() => setActiveViewerTab('mock')}
                 >
                   <IconGraduationCap size={14} />
@@ -320,7 +320,7 @@ export function ReviewScreen() {
                   href={readSasUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ fontSize: '0.75rem', color: 'var(--ice-blue-light)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  style={{ fontSize: '0.75rem', color: 'var(--soft-blue-dark)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                 >
                   <span>Open Scan in Tab</span>
                   <IconExternalLink size={12} />
@@ -400,7 +400,7 @@ export function ReviewScreen() {
             </div>
 
             {jobMeta?.blob_key && (
-              <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--slate-blue-light)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--slate-blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 Source Blob: <code>{jobMeta.blob_key}</code>
               </div>
             )}
@@ -413,12 +413,12 @@ export function ReviewScreen() {
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
                   Extracted Record & Confidence Audit
                 </h3>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>
                   Fields with confidence below 0.85 are highlighted in amber.
                 </p>
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Threshold: <span style={{ color: '#6ee7b7', fontWeight: 700 }}>&ge; {(confidences.threshold * 100).toFixed(0)}%</span>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>
+                Threshold: <span style={{ color: 'var(--status-emerald-text)', fontWeight: 700 }}>&ge; {(confidences.threshold * 100).toFixed(0)}%</span>
               </div>
             </div>
 

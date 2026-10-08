@@ -77,9 +77,9 @@ export function Navbar() {
                     {user.role}
                   </span>
                   {authMode === 'entra' ? (
-                    <span style={{ fontSize: '0.65rem', color: 'var(--ice-blue)' }}>Entra</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--soft-blue-dark)' }}>Entra</span>
                   ) : (
-                    <span style={{ fontSize: '0.65rem', color: 'var(--slate-blue-light)' }}>Dev Mode</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--slate-blue)' }}>Dev Mode</span>
                   )}
                 </div>
               </div>
@@ -100,7 +100,7 @@ export function Navbar() {
             <button
               id="btn-login-entra"
               className="persona-btn"
-              style={{ borderColor: 'var(--border-ice)', color: 'var(--ice-blue-light)' }}
+              style={{ borderColor: 'var(--border-ice)', color: 'var(--slate-blue-dark)' }}
               onClick={loginWithEntra}
             >
               Microsoft Entra

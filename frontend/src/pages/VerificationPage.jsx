@@ -119,10 +119,10 @@ export function VerificationPage() {
           <div style={{ margin: '0 auto 1rem', width: 56, height: 56, borderRadius: '50%', background: 'var(--status-rose-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <IconXCircle size={32} color="var(--status-rose)" />
           </div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fda4af', marginBottom: '0.75rem' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--status-rose-text)', marginBottom: '0.75rem' }}>
             Credential Record Not Found
           </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-sub)', fontSize: '0.9rem' }}>
             {errorMsg}
           </p>
         </div>
@@ -134,10 +134,10 @@ export function VerificationPage() {
               <IconCheck size={24} color="#ffffff" />
             </div>
             <div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#6ee7b7', letterSpacing: '-0.02em' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--status-emerald-text)', letterSpacing: '-0.02em' }}>
                 AUTHENTIC & VERIFIED CREDENTIAL
               </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)' }}>
                 {certData.verified_by_issuer
                   ? 'Cryptographically authenticated and confirmed by accredited university authority.'
                   : 'Document digitized with tamper-evident SHA-256 seal.'}
@@ -191,14 +191,14 @@ export function VerificationPage() {
 
             <div>
               <div className="meta-field-label">Institutional Verification</div>
-              <div className="meta-field-value" style={{ color: certData.verified_by_issuer ? '#6ee7b7' : 'var(--status-amber)' }}>
+              <div className="meta-field-value" style={{ color: certData.verified_by_issuer ? 'var(--status-emerald-text)' : 'var(--status-amber-text)' }}>
                 {certData.verified_by_issuer ? 'Confirmed by University Registrar' : 'Pending Registrar Review'}
               </div>
             </div>
 
             <div>
               <div className="meta-field-label">Tamper-Proof Audit Status</div>
-              <div className="meta-field-value" style={{ color: '#6ee7b7' }}>
+              <div className="meta-field-value" style={{ color: 'var(--status-emerald-text)' }}>
                 {certData.tamper_status || 'VALID_UNALTERED'}
               </div>
             </div>
@@ -212,7 +212,7 @@ export function VerificationPage() {
 
             {certData.fields_hash && (
               <div style={{ marginBottom: '1rem' }}>
-                <div style={{ fontSize: '0.7rem', color: 'var(--slate-blue-light)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--slate-blue)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
                   Canonical Fields SHA-256 Digest
                 </div>
                 <div className="mono-hash" id="verify-fields-hash">
@@ -222,7 +222,7 @@ export function VerificationPage() {
             )}
 
             <div style={{ marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.7rem', color: 'var(--slate-blue-light)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--slate-blue)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
                 Raw Source Document SHA-256 Digest
               </div>
               <div className="mono-hash" id="verify-document-hash">
@@ -231,7 +231,7 @@ export function VerificationPage() {
             </div>
 
             <div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--slate-blue-light)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--slate-blue)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
                 Public Verification ID
               </div>
               <div className="mono-hash" id="verify-public-id">

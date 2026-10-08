@@ -167,15 +167,15 @@ export function StudentPortal() {
                 id="file-input-element"
               />
               <div className="dropzone-icon">
-                <IconCloudUpload size={26} color="var(--ice-blue-light)" />
+                <IconCloudUpload size={26} color="var(--slate-blue)" />
               </div>
 
               {selectedFile ? (
                 <div>
-                  <div style={{ fontWeight: 700, color: 'var(--ice-blue-light)', fontSize: '1rem', wordBreak: 'break-all' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--soft-blue-dark)', fontSize: '1rem', wordBreak: 'break-all' }}>
                     {selectedFile.name}
                   </div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                  <div style={{ color: 'var(--text-sub)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
                     {(selectedFile.size / 1024).toFixed(1)} KB • Click to change file
                   </div>
                 </div>
@@ -188,13 +188,13 @@ export function StudentPortal() {
             </div>
 
             {errorMessage && (
-              <div id="upload-error-msg" style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: 8, background: 'var(--status-rose-tint)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fda4af', fontSize: '0.85rem' }}>
+              <div id="upload-error-msg" style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: 8, background: 'var(--status-rose-tint)', border: '1px solid rgba(201, 59, 78, 0.3)', color: 'var(--status-rose-text)', fontSize: '0.85rem' }}>
                 {errorMessage}
               </div>
             )}
 
             {uploadMessage && (
-              <div id="upload-status-msg" style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: 8, background: 'var(--ice-blue-tint)', border: '1px solid var(--border-ice)', color: 'var(--ice-blue-light)', fontSize: '0.85rem' }}>
+              <div id="upload-status-msg" style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: 8, background: 'var(--ice-blue-tint)', border: '1px solid var(--border-ice)', color: 'var(--soft-blue-dark)', fontSize: '0.85rem' }}>
                 {uploadMessage}
               </div>
             )}
@@ -299,7 +299,7 @@ export function StudentPortal() {
 
           {/* Detailed Job Drawer */}
           {selectedJobDetails && (
-            <div className="glass-panel" style={{ marginTop: '1.5rem', background: 'var(--bg-charcoal-card)', border: '1px solid var(--border-ice)' }}>
+            <div className="glass-panel" style={{ marginTop: '1.5rem', background: 'var(--bg-card)', border: '1px solid var(--border-ice)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>
                   Job Telemetry: {selectedJobDetails.id}
@@ -315,30 +315,30 @@ export function StudentPortal() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
                 <div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--slate-blue-light)', textTransform: 'uppercase', fontWeight: 700 }}>Status</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--slate-blue)', textTransform: 'uppercase', fontWeight: 700 }}>Status</div>
                   <div style={{ marginTop: '0.25rem' }}><StatusBadge status={selectedJobDetails.status} /></div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--slate-blue-light)', textTransform: 'uppercase', fontWeight: 700 }}>Blob Storage Key</div>
-                  <div style={{ fontSize: '0.82rem', fontFamily: 'var(--font-mono)', marginTop: '0.25rem', color: 'var(--ice-blue-light)' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--slate-blue)', textTransform: 'uppercase', fontWeight: 700 }}>Blob Storage Key</div>
+                  <div style={{ fontSize: '0.82rem', fontFamily: 'var(--font-mono)', marginTop: '0.25rem', color: 'var(--soft-blue-dark)' }}>
                     {selectedJobDetails.raw_blob_key || 'raw-certificates/' + selectedJobDetails.id}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--slate-blue-light)', textTransform: 'uppercase', fontWeight: 700 }}>File Details</div>
-                  <div style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--slate-blue)', textTransform: 'uppercase', fontWeight: 700 }}>File Details</div>
+                  <div style={{ fontSize: '0.85rem', marginTop: '0.25rem', color: 'var(--text-main)' }}>
                     {selectedJobDetails.filename} ({(selectedJobDetails.size_bytes / 1024).toFixed(1)} KB)
                   </div>
                 </div>
               </div>
 
               {selectedJobDetails.status === 'processed' && (
-                <div style={{ background: 'var(--status-emerald-tint)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 10, padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div style={{ background: 'var(--status-emerald-tint)', border: '1px solid rgba(22, 128, 84, 0.3)', borderRadius: 10, padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                     <IconCheckCircle size={20} color="var(--status-emerald)" />
                     <div>
-                      <div style={{ fontWeight: 700, color: '#6ee7b7' }}>Credential Digitized & Verified</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Cryptographic proof has been published.</div>
+                      <div style={{ fontWeight: 700, color: 'var(--status-emerald-text)' }}>Credential Digitized & Verified</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>Cryptographic proof has been published.</div>
                     </div>
                   </div>
                   <Link to={`/verify/${selectedJobDetails.id}`} className="btn btn-success" style={{ fontSize: '0.8rem', padding: '0.45rem 0.85rem' }}>
