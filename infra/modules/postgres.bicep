@@ -82,7 +82,7 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2022-12-0
   }
 }
 
-// SSL required
+// SSL required (serialized after database creation to avoid ServerIsBusy)
 resource sslConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2022-12-01' = {
   parent: server
   name: 'require_secure_transport'
@@ -90,6 +90,9 @@ resource sslConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@202
     value: 'on'
     source: 'user-override'
   }
+  dependsOn: [
+    database
+  ]
 }
 
 // Firewall rule: allow Azure services (0.0.0.0 to 0.0.0.0)
