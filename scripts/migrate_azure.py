@@ -18,6 +18,32 @@ from run_with_azure_env import resolve_azure_config
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def ensure_firewall_rule(cfg: dict, target_host: str) -> None:
+    """Ensure developer's current public IP is permitted through the Postgres firewall."""
+    try:
+        import urllib.request
+        with urllib.request.urlopen("https://api.ipify.org", timeout=5) as resp:
+            my_ip = resp.read().decode("utf-8").strip()
+        server_name = target_host.split(".")[0]
+        rule_name = f"dev-{my_ip.replace('.', '-')}"
+        az_bin = shutil.which("az.cmd") or shutil.which("az") or "az"
+        print(f"[*] Ensuring firewall rule '{rule_name}' exists for IP {my_ip}...")
+        res = subprocess.run([
+            az_bin, "postgres", "flexible-server", "firewall-rule", "create",
+            "-g", cfg["rg"],
+            "-s", server_name,
+            "-n", rule_name,
+            "--start-ip-address", my_ip,
+            "--end-ip-address", my_ip,
+        ], check=False, capture_output=True, text=True)
+        if res.returncode == 0:
+            print(f"[✓] Firewall rule verified for {my_ip}")
+        else:
+            print(f"[!] Note: Firewall rule check: {res.stderr.strip() or res.stdout.strip()}")
+    except Exception as e:
+        print(f"[*] Note: Firewall check skipped: {e}")
+
+
 def main():
     print("=" * 70)
     print("Credenviel Azure PostgreSQL Migration Runner")
@@ -63,6 +89,8 @@ def main():
     if confirmation.lower() != "yes":
         print("Aborted by user.")
         sys.exit(1)
+
+    ensure_firewall_rule(cfg, target_host)
 
     print("\n[*] Applying migrations...")
 
