@@ -86,7 +86,7 @@ Container Apps environment, worker app with KEDA rule, Function app, Event Grid 
 
 ---
 
-## Phase 3 — Authentication & Authorization
+## Phase 3 — Authentication & Authorization (DONE)
 
 **What:** Microsoft Entra ID integration, app roles (`Issuer`, `Student`), JWT validation middleware in Go API, JIT user provisioning, and scoped user-delegation SAS token generation (implemented in Phase 2; here it moves to the API's managed identity). Also: decide the Entra tenant strategy (app registration is blocked in the university tenant; see D-031 / Q-010) and deploy the API to Container Apps once real auth exists.
 
@@ -97,7 +97,9 @@ Container Apps environment, worker app with KEDA rule, Function app, Event Grid 
 - [x] Caller with `Issuer` app role can view all institutional jobs, trigger bulk upload, and access review endpoints.
 - [x] User-delegation SAS tokens are generated dynamically using API managed identity, scoped strictly to the target blob path with write-only permissions (`api/internal/storage/azure.go`).
 - [x] Entra tenant strategy decided and recorded (D-045 personal developer Entra tenant with mock JWT fallback; D-046 Azure Static Web Apps; D-047 GitHub Actions federated credential).
-- [ ] Go API deployed to Container Apps with real auth (`AUTH_MODE=entra` or `AUTH_MODE=jwt`).
+- [x] Go API deployed to Container Apps with real auth (`AUTH_MODE=jwt` on `ca-api-n2ivlk5gk235i` in `eastasia`; verified `/healthz` returning 200 and unauthenticated `/api/v1/jobs` returning 401).
+- [x] Azure Static Web App deployed on Free tier in `eastasia` (`stapp-cred-n2ivlk5gk235i`).
+- [x] GitHub Actions Passwordless Federated Identity Credentials deployed on User-Assigned Managed Identity (`id-credenviel-n2ivlk5gk235i`).
 - [x] Dev-bypass configuration allows local development without requiring live Entra tokens (`AUTH_MODE=dev`).
 
 ---
