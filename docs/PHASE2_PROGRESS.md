@@ -181,7 +181,7 @@ Lessons:
 - [x] `make test-azure`: succeeded!
   - Python Azure adapter suite (`pytest -m azure`): 4/4 passed (blob roundtrip, service bus send/receive, abandon/delivery count, dead-lettering).
   - Go SAS signer suite (`go test -tags azure ./internal/storage`): 3/3 passed (valid PUT with BlockBlob header, rejects tampered SAS, rejects expired SAS).
-- [ ] Stop Postgres server at end of session:
+- [x] Stop Postgres server at end of session:
   `az postgres flexible-server stop -g rg-credenviel-dev -n psql-cred-n2ivlk5gk235i`
 
 Lessons:
@@ -189,5 +189,49 @@ Lessons:
   - Service Bus adapter was upgraded to use `TransportType.AmqpOverWebsocket` over HTTPS port 443, enabling seamless local execution.
   - Azure PostgreSQL migrations were applied cleanly using Azure Cloud Shell (`shell.azure.com`), which runs directly within the Azure backbone.
 - **Postgres ARM Concurrency**: In `postgres.bicep`, configuration updates like `require_secure_transport` must serialize after database creation using `dependsOn: [database]` to avoid `ServerIsBusy` conflicts.
+
+---
+
+## 2c: Compute & End-to-End
+
+### Local checks (agent, no Azure mutating calls)
+
+- Bicep CLI 0.48.1 builds and lints cleanly on all compute modules and main orchestration:
+  - `az bicep build --file infra/main.bicep`: exit 0, clean build.
+  - `az bicep lint --file infra/main.bicep`: exit 0, clean lint.
+  - Modules `container-apps-env.bicep`, `worker-app.bicep`, `function-app.bicep`, `event-grid.bicep`: exit 0.
+  - Parameter file `infra/parameters/dev.bicepparam`: `az bicep build-params`: exit 0.
+- Worker containerization & graceful shutdown:
+  - `worker/Dockerfile`: Created based on `python:3.11-slim` with non-root user `appuser` and context repository root.
+  - Graceful shutdown: `SIGTERM`/`SIGINT` traps ensure in-flight job completes before process exits cleanly with code 0.
+  - `pytest worker/tests/test_worker.py -m "not integration"`: 7 passed, exit 0.
+- Azure Function wiring & packaging:
+  - `functions/function_app.py`: Integrated with PostgreSQL, `BlobStore`, `ServiceBusQueue`, and robust Event Grid blob path extraction.
+  - `pytest functions/tests/test_function.py`: 6 passed, exit 0.
+  - Packaging tool `scripts/package_function.py`: Verified, creates clean deployable zip `dist/function-app.zip` (15.76 KB) with vendored `credenviel_shared`.
+- Verification tooling:
+  - `scripts/e2e_azure.py`: Verified CLI flags, validates end-to-end pipeline from SAS upload through Event Grid, Function, Service Bus, and Worker to PostgreSQL.
+  - `scripts/scale_test_azure.py`: Verified CLI flags, executes 25-job burst test, samples queue depth and replica count every 15s to CSV.
+  - Makefile targets `package-function`, `e2e-azure`, `scale-test-azure` added.
+
+### Owner steps (against Azure)
+
+- [x] **Pass 1 (p2c-1)**: Deploy compute infrastructure with apps disabled (`provisioningState: Succeeded`).
+- [x] **Docker push**: Build and push worker image to ACR with `--platform linux/amd64 --provenance=false`. Image tag `worker:168f210` pushed successfully.
+- [x] **Pass 2 (p2c-2)**: Deploy worker container app (`ca-worker-n2ivlk5gk235i`) with ACR admin credentials and `minReplicas: 1` per Express profile constraint (D-043, D-044).
+- [x] **Publish Function**: Built zip package `dist/function-app.zip` and deployed via `az functionapp deployment source config-zip` (`deploymentStatus: 4`).
+- [x] **Pass 3 (p2c-3)**: Enable Event Grid subscription (`enableEventSubscription=true`) mapping `raw-uploads` blob creation to the Function App trigger.
+- [x] **Pipeline Verification**:
+  - Direct SAS Upload: 480-byte PDF successfully uploaded to Azure Blob Storage `raw-uploads/`.
+  - Event Grid trigger: Event Grid detected upload and invoked the Function App.
+  - Function Execution: Function App validated magic bytes, transitioned job to `queued`, and enqueued message to Azure Service Bus.
+  - Service Bus Queuing: Successfully received and buffered 26 messages during 25-job burst test.
+  - Worker Consumption: Worker Container App authenticated via User-Assigned Managed Identity, polled Service Bus, and processed messages from `job-processing`.
+- [x] **Lessons Learned**:
+  - ACA Express environments in `eastasia` restrict custom scale rules (`minReplicas: 1`) and custom revision suffixes (D-043).
+  - ACR image pull in ACA Express environment requires ACR admin credentials rather than managed identity (D-044).
+  - Cloud Shell reserves port 8080; Go API configured to use port 8085.
+  - Worker connection resilience: If Postgres stops between sessions, worker process detects `conn.closed` and exits cleanly so container orchestrator auto-restarts with a fresh connection.
+- [x] **Stop Postgres**: Flexible server stopped between sessions to preserve student credits.
 
 
