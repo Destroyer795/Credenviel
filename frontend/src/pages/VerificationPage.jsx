@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getVerification } from '../api/client'
+import {
+  IconShield,
+  IconAlertTriangle,
+  IconXCircle,
+  IconCheck,
+  IconDownload,
+  IconCopy,
+  IconPrinter,
+  IconSearch,
+} from '../components/Icons'
 
 export function VerificationPage() {
   const { id } = useParams()
@@ -60,9 +70,10 @@ export function VerificationPage() {
   return (
     <div className="page-container">
       {/* Search Header */}
-      <div style={{ maxWidth: '760px', margin: '0 auto 2.5rem', textAlign: 'center' }}>
+      <div style={{ maxWidth: '780px', margin: '0 auto 2.5rem', textAlign: 'center' }}>
         <h1 className="page-title" id="verify-page-title" style={{ justifyContent: 'center', marginBottom: '0.75rem' }}>
-          🛡️ Public Credential Verifier
+          <IconShield size={28} color="var(--ice-blue)" />
+          <span>Public Credential Verifier</span>
         </h1>
         <p className="page-subtitle" style={{ margin: '0 auto 1.5rem' }}>
           Instantly verify the authenticity, cryptographic integrity, and issuing authority of any Credenviel digitized academic credential.
@@ -78,7 +89,8 @@ export function VerificationPage() {
             onChange={(e) => setSearchInput(e.target.value)}
           />
           <button type="submit" id="btn-lookup-verify" className="btn btn-primary" style={{ flexShrink: 0 }}>
-            Verify
+            <IconSearch size={16} />
+            <span>Verify</span>
           </button>
         </form>
       </div>
@@ -88,22 +100,26 @@ export function VerificationPage() {
           Verifying cryptographic signatures and audit ledger...
         </div>
       ) : isRateLimited ? (
-        <div className="glass-panel" style={{ maxWidth: '680px', margin: '0 auto', textAlign: 'center', padding: '3rem 2rem', borderColor: 'var(--accent-amber)' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>⚠️</div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--accent-amber)', marginBottom: '0.75rem' }}>
+        <div className="glass-panel" style={{ maxWidth: '680px', margin: '0 auto', textAlign: 'center', padding: '3rem 2rem', borderColor: 'var(--status-amber)' }}>
+          <div style={{ margin: '0 auto 1rem', width: 56, height: 56, borderRadius: '50%', background: 'var(--status-amber-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <IconAlertTriangle size={32} color="var(--status-amber)" />
+          </div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--status-amber)', marginBottom: '0.75rem' }}>
             Rate Limit Exceeded
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
             {errorMsg}
           </p>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--slate-blue-light)' }}>
             To protect infrastructure against brute-force harvesting, public queries are capped at 30 requests per minute per IP address.
           </div>
         </div>
       ) : errorMsg ? (
-        <div className="glass-panel" style={{ maxWidth: '680px', margin: '0 auto', textAlign: 'center', padding: '3rem 2rem', borderColor: 'var(--accent-rose)' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>✕</div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--accent-rose)', marginBottom: '0.75rem' }}>
+        <div className="glass-panel" style={{ maxWidth: '680px', margin: '0 auto', textAlign: 'center', padding: '3rem 2rem', borderColor: 'var(--status-rose)' }}>
+          <div style={{ margin: '0 auto 1rem', width: 56, height: 56, borderRadius: '50%', background: 'var(--status-rose-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <IconXCircle size={32} color="var(--status-rose)" />
+          </div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fda4af', marginBottom: '0.75rem' }}>
             Credential Record Not Found
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
@@ -115,12 +131,10 @@ export function VerificationPage() {
           {/* Header Verified Banner */}
           <div className="verify-header-badge" id="verification-status-banner">
             <div className="verify-check-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
+              <IconCheck size={24} color="#ffffff" />
             </div>
             <div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-emerald)', letterSpacing: '-0.02em' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#6ee7b7', letterSpacing: '-0.02em' }}>
                 AUTHENTIC & VERIFIED CREDENTIAL
               </div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -177,28 +191,28 @@ export function VerificationPage() {
 
             <div>
               <div className="meta-field-label">Institutional Verification</div>
-              <div className="meta-field-value" style={{ color: certData.verified_by_issuer ? 'var(--accent-emerald)' : 'var(--accent-amber)' }}>
-                {certData.verified_by_issuer ? '✓ Confirmed by University Registrar' : '⚠️ Pending Review'}
+              <div className="meta-field-value" style={{ color: certData.verified_by_issuer ? '#6ee7b7' : 'var(--status-amber)' }}>
+                {certData.verified_by_issuer ? 'Confirmed by University Registrar' : 'Pending Registrar Review'}
               </div>
             </div>
 
             <div>
               <div className="meta-field-label">Tamper-Proof Audit Status</div>
-              <div className="meta-field-value" style={{ color: 'var(--accent-emerald)' }}>
-                ✓ {certData.tamper_status || 'VALID_UNALTERED'}
+              <div className="meta-field-value" style={{ color: '#6ee7b7' }}>
+                {certData.tamper_status || 'VALID_UNALTERED'}
               </div>
             </div>
           </div>
 
           {/* Cryptographic Proof Details */}
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1.5rem', marginBottom: '1.75rem' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-sub)' }}>
               Cryptographic Audit Proof
             </div>
 
             {certData.fields_hash && (
               <div style={{ marginBottom: '1rem' }}>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--slate-blue-light)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
                   Canonical Fields SHA-256 Digest
                 </div>
                 <div className="mono-hash" id="verify-fields-hash">
@@ -208,7 +222,7 @@ export function VerificationPage() {
             )}
 
             <div style={{ marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--slate-blue-light)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
                 Raw Source Document SHA-256 Digest
               </div>
               <div className="mono-hash" id="verify-document-hash">
@@ -217,7 +231,7 @@ export function VerificationPage() {
             </div>
 
             <div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--slate-blue-light)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
                 Public Verification ID
               </div>
               <div className="mono-hash" id="verify-public-id">
@@ -228,7 +242,7 @@ export function VerificationPage() {
 
           {/* Action Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+            <div style={{ fontSize: '0.8rem', color: 'var(--slate-blue-light)' }}>
               Proof Standard: {certData.signature_algorithm || 'RSA-PSS-SHA256 (Azure Key Vault HSM)'}
             </div>
 
@@ -242,7 +256,8 @@ export function VerificationPage() {
                   id="btn-download-stamped-pdf"
                   style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
                 >
-                  📥 Download QR-Stamped PDF
+                  <IconDownload size={15} />
+                  <span>Download QR-Stamped PDF</span>
                 </a>
               )}
               <button
@@ -251,7 +266,17 @@ export function VerificationPage() {
                 style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
                 onClick={handleCopyLink}
               >
-                {copied ? '✓ Link Copied' : '🔗 Copy Public Link'}
+                {copied ? (
+                  <>
+                    <IconCheck size={15} />
+                    <span>Link Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <IconCopy size={15} />
+                    <span>Copy Public Link</span>
+                  </>
+                )}
               </button>
               <button
                 id="btn-print-certificate"
@@ -259,7 +284,8 @@ export function VerificationPage() {
                 style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
                 onClick={handlePrint}
               >
-                🖨️ Print Certificate
+                <IconPrinter size={15} />
+                <span>Print Certificate</span>
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
-# Frontend — React (Vite)
+# Frontend (React + Vite)
 
-Certificate Digitization & Verification Pipeline — React frontend.
+Certificate Digitization & Verification Pipeline: React frontend.
 
 ## Setup
 
@@ -11,8 +11,8 @@ npm run dev
 
 ## Routes
 
-- `/` — Landing / login
-- `/issuer` — Issuer dashboard (bulk upload, all jobs)
-- `/issuer/review` — Review screen (resolve `needs_review` flags, confirm student uploads)
-- `/student` — Student dashboard (own uploads, status)
-- `/verify/:id` — Public verification page (hash + QR lookup)
+- `/` : Landing / verification entry
+- `/issuer` : Issuer dashboard (registry, status filters)
+- `/issuer/review` : Review screen (human-in-the-loop review station)
+- `/student` : Student portal (upload certificates, live tracking)
+- `/verify/:id` : Public verification page (hash + QR lookup)

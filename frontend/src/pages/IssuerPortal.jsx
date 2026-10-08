@@ -3,6 +3,14 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { listJobs } from '../api/client'
 import { StatusBadge } from '../components/StatusBadge'
+import {
+  IconBuilding,
+  IconScale,
+  IconAlertTriangle,
+  IconCheckCircle,
+  IconActivity,
+  IconEye,
+} from '../components/Icons'
 
 export function IssuerPortal() {
   const auth = useAuth()
@@ -44,10 +52,11 @@ export function IssuerPortal() {
 
   return (
     <div className="page-container">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.25rem' }}>
         <div>
           <h1 className="page-title" id="issuer-portal-title">
-            🏛️ Issuer & Registrar Dashboard
+            <IconBuilding size={28} color="var(--ice-blue)" />
+            <span>Issuer & Registrar Dashboard</span>
           </h1>
           <p className="page-subtitle">
             Manage academic credential digitization, audit OCR confidence levels, and resolve human-in-the-loop review queues.
@@ -55,17 +64,18 @@ export function IssuerPortal() {
         </div>
 
         <Link to="/issuer/review" className="btn btn-primary" id="btn-quick-review">
-          Open Review Station ⚖️
+          <IconScale size={16} />
+          <span>Open Review Station</span>
         </Link>
       </div>
 
       {/* KPI Metric Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
         <div className="glass-panel" id="metric-total">
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>
+          <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue-light)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
             Total Submissions
           </div>
-          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem' }}>
+          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>
             {totalCount}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
@@ -74,10 +84,13 @@ export function IssuerPortal() {
         </div>
 
         <div className="glass-panel" id="metric-review" style={{ borderColor: reviewCount > 0 ? 'rgba(245, 158, 11, 0.4)' : 'var(--border-subtle)' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--accent-amber)', textTransform: 'uppercase', fontWeight: 700 }}>
-            Requires Review ⚠️
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.74rem', color: 'var(--status-amber)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+              Requires Review
+            </span>
+            {reviewCount > 0 && <IconAlertTriangle size={15} color="var(--status-amber)" />}
           </div>
-          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--accent-amber)' }}>
+          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--status-amber)', fontFamily: 'var(--font-mono)' }}>
             {reviewCount}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
@@ -86,10 +99,13 @@ export function IssuerPortal() {
         </div>
 
         <div className="glass-panel" id="metric-processed">
-          <div style={{ fontSize: '0.8rem', color: 'var(--accent-emerald)', textTransform: 'uppercase', fontWeight: 700 }}>
-            Digitized & Issued ✓
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.74rem', color: '#6ee7b7', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+              Digitized & Issued
+            </span>
+            <IconCheckCircle size={15} color="var(--status-emerald)" />
           </div>
-          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--accent-emerald)' }}>
+          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: '#6ee7b7', fontFamily: 'var(--font-mono)' }}>
             {processedCount}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
@@ -98,10 +114,13 @@ export function IssuerPortal() {
         </div>
 
         <div className="glass-panel" id="metric-processing">
-          <div style={{ fontSize: '0.8rem', color: 'var(--accent-cyan)', textTransform: 'uppercase', fontWeight: 700 }}>
-            In Active Pipeline
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.74rem', color: 'var(--ice-blue-light)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+              In Active Pipeline
+            </span>
+            <IconActivity size={15} color="var(--ice-blue)" />
           </div>
-          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--accent-cyan)' }}>
+          <div style={{ fontSize: '2.4rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--ice-blue-light)', fontFamily: 'var(--font-mono)' }}>
             {processingCount}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
@@ -114,19 +133,19 @@ export function IssuerPortal() {
       <div className="glass-panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Credential Queue</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>Credential Registry</h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
               Registrar review and audit management
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {['all', 'requires_review', 'processed', 'processing'].map((statusKey) => (
               <button
                 key={statusKey}
                 id={`filter-${statusKey}`}
                 className={`persona-btn ${filterStatus === statusKey ? 'active' : ''}`}
-                style={filterStatus === statusKey ? { background: 'var(--primary)', color: '#fff', borderColor: 'var(--primary)' } : {}}
+                style={filterStatus === statusKey ? { background: 'var(--ice-blue-deep)', color: '#fff', borderColor: 'var(--ice-blue)' } : {}}
                 onClick={() => setFilterStatus(statusKey)}
               >
                 {statusKey.replace('_', ' ').toUpperCase()}
@@ -164,7 +183,7 @@ export function IssuerPortal() {
                   <tr key={job.id} id={`issuer-job-${job.id}`}>
                     <td>
                       <div style={{ fontWeight: 600 }}>{job.filename || 'Academic Document'}</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--slate-blue-light)' }}>
                         {job.id}
                       </div>
                     </td>
@@ -173,7 +192,7 @@ export function IssuerPortal() {
                     </td>
                     <td>
                       <div style={{ fontSize: '0.85rem' }}>{job.uploader_name || 'Enrolled Student'}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{job.uploader_id || 'ID-verified'}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--slate-blue-light)' }}>{job.uploader_id || 'ID-verified'}</div>
                     </td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'Recent'}
@@ -185,7 +204,17 @@ export function IssuerPortal() {
                         style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
                         onClick={() => navigate(`/issuer/review?jobId=${job.id}`)}
                       >
-                        {job.status === 'requires_review' || job.status === 'needs_review' ? 'Review & Approve ⚠️' : 'Inspect'}
+                        {job.status === 'requires_review' || job.status === 'needs_review' ? (
+                          <>
+                            <IconScale size={13} />
+                            <span>Review & Approve</span>
+                          </>
+                        ) : (
+                          <>
+                            <IconEye size={13} />
+                            <span>Inspect</span>
+                          </>
+                        )}
                       </button>
                     </td>
                   </tr>

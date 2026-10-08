@@ -167,7 +167,7 @@ export async function createJob({ filename, contentType, sizeBytes }, authState)
     )
   } catch (err) {
     // Offline Demo fallback
-    console.info('[Credenviel Client] Backend API standby — creating job in interactive demo mode.')
+    console.info('[Credenviel Client] Backend API standby: creating job in interactive demo mode.')
     const jobs = getMockJobs()
     const mockId = 'job-' + Math.random().toString(36).substring(2, 8) + '-' + Date.now().toString(36).slice(-4)
     const newJob = {

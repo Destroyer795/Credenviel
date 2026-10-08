@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { getReviewDetails, resolveReview, rejectReview, listReviewQueue } from '../api/client'
+import {
+  IconScale,
+  IconCheckCircle,
+  IconShield,
+  IconXCircle,
+  IconFileText,
+  IconGraduationCap,
+  IconAlertTriangle,
+  IconCheck,
+  IconX,
+  IconExternalLink,
+} from '../components/Icons'
 
 export function ReviewScreen() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -99,7 +111,7 @@ export function ReviewScreen() {
 
           if (rec.confidence_json?.fields) {
             setConfidences({
-              threshold: rec.confidence_json.threshold || 0.85,
+              threshold: 0.85,
               fields: rec.confidence_json.fields,
               marks: rec.confidence_json.marks || {},
             })
@@ -107,21 +119,21 @@ export function ReviewScreen() {
         }
       })
       .catch((err) => {
-        console.warn('Review details fetch failed, staying on demo defaults:', err)
+        console.warn('Review details fetch notice:', err.message)
       })
       .finally(() => {
         setLoading(false)
       })
-  }, [requestedJobId, currentJobId, auth])
+  }, [currentJobId, requestedJobId, auth])
 
   const handleInputChange = (field, val) => {
     setFormData((prev) => ({ ...prev, [field]: val }))
   }
 
-  const handleMarksChange = (index, field, val) => {
+  const handleMarksChange = (idx, col, val) => {
     setFormData((prev) => {
       const updatedMarks = [...prev.marks]
-      updatedMarks[index] = { ...updatedMarks[index], [field]: val }
+      updatedMarks[idx] = { ...updatedMarks[idx], [col]: val }
       return { ...prev, marks: updatedMarks }
     })
   }
@@ -129,23 +141,20 @@ export function ReviewScreen() {
   const handleAddMarkRow = () => {
     setFormData((prev) => ({
       ...prev,
-      marks: [
-        ...prev.marks,
-        { code: '', name: '', credits: '', grade: '', grade_points: '' },
-      ],
+      marks: [...prev.marks, { code: '', name: '', credits: '', grade: '', grade_points: '' }],
     }))
   }
 
-  const handleRemoveMarkRow = (index) => {
+  const handleRemoveMarkRow = (idx) => {
     setFormData((prev) => ({
       ...prev,
-      marks: prev.marks.filter((_, i) => i !== index),
+      marks: prev.marks.filter((_, i) => i !== idx),
     }))
   }
 
-  const handleJobSelect = (id) => {
-    setCurrentJobId(id)
-    setSearchParams({ jobId: id })
+  const handleJobSelect = (jobId) => {
+    setCurrentJobId(jobId)
+    setSearchParams({ jobId })
     setActionDone(null)
   }
 
@@ -153,14 +162,14 @@ export function ReviewScreen() {
     setSaving(true)
     try {
       const payload = {
-        name: formData.name || null,
-        roll_number: formData.roll_number || null,
-        register_number: formData.register_number || null,
-        degree: formData.degree || null,
-        cgpa: formData.cgpa || null,
-        issue_date: formData.issue_date || null,
-        marks_json: formData.marks.length > 0 ? formData.marks : null,
-        notes: formData.reviewerNotes || 'Approved by registrar review station',
+        name: formData.name,
+        roll_number: formData.roll_number,
+        register_number: formData.register_number,
+        degree: formData.degree,
+        cgpa: formData.cgpa,
+        issue_date: formData.issue_date,
+        marks_json: formData.marks,
+        reviewer_notes: formData.reviewerNotes,
       }
 
       const res = await resolveReview(currentJobId, payload, auth)
@@ -193,10 +202,11 @@ export function ReviewScreen() {
       {/* Header with Navigation and Queue Selector */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Link to="/issuer" className="persona-btn">← Back to Queue</Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <Link to="/issuer" className="persona-btn">&larr; Back to Queue</Link>
             <h1 className="page-title" id="review-screen-title" style={{ fontSize: '1.75rem' }}>
-              ⚖️ Human-in-the-Loop Review Station
+              <IconScale size={24} color="var(--ice-blue)" />
+              <span>Human-in-the-Loop Review Station</span>
             </h1>
           </div>
           <p className="page-subtitle">
@@ -204,7 +214,7 @@ export function ReviewScreen() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           {queue.length > 1 && (
             <select
               className="form-input"
@@ -222,7 +232,7 @@ export function ReviewScreen() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Target Job:</span>
-            <code style={{ background: 'rgba(0,0,0,0.4)', padding: '0.2rem 0.6rem', borderRadius: 6, fontSize: '0.8rem', color: 'var(--accent-cyan)' }}>
+            <code style={{ background: 'rgba(0,0,0,0.4)', padding: '0.2rem 0.6rem', borderRadius: 6, fontSize: '0.8rem', color: 'var(--ice-blue-light)' }}>
               {currentJobId ? `${currentJobId.slice(0, 16)}...` : 'demo-review'}
             </code>
           </div>
@@ -232,11 +242,11 @@ export function ReviewScreen() {
       {/* Post-Action Confirmation States */}
       {actionDone === 'approved' ? (
         <div className="glass-panel" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--accent-emerald)', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: '#fff' }}>
-            ✓
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--status-emerald)', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 0 20px rgba(16, 185, 129, 0.4)' }}>
+            <IconCheck size={32} />
           </div>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-            Credential Approved & Cryptographically Sealed!
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-main)' }}>
+            Credential Approved & Cryptographically Sealed
           </h2>
           <p style={{ color: 'var(--text-muted)', maxWidth: 600, margin: '0 auto 1.5rem' }}>
             The certificate for <strong>{formData.name}</strong> has been verified. The canonical SHA-256 hash has been recomputed and anchored in the audit registry.
@@ -244,7 +254,7 @@ export function ReviewScreen() {
 
           {resolvedResult?.fields_hash && (
             <div style={{ maxWidth: 560, margin: '0 auto 2rem', textAlign: 'left' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
+              <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue-light)', marginBottom: '0.25rem', textTransform: 'uppercase', fontWeight: 700 }}>
                 Recomputed Canonical Fields Hash:
               </div>
               <div className="mono-hash">{resolvedResult.fields_hash}</div>
@@ -253,7 +263,8 @@ export function ReviewScreen() {
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <Link to={`/verify/${currentJobId}`} className="btn btn-success" id="btn-view-issued-proof">
-              View Public Verification Certificate 🛡️
+              <IconShield size={16} />
+              <span>View Public Verification Certificate</span>
             </Link>
             <Link to="/issuer" className="btn btn-secondary">
               Return to Review Queue
@@ -262,16 +273,16 @@ export function ReviewScreen() {
         </div>
       ) : actionDone === 'rejected' ? (
         <div className="glass-panel" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--accent-rose)', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: '#fff' }}>
-            ✕
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--status-rose)', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 0 20px rgba(244, 63, 94, 0.4)' }}>
+            <IconX size={32} />
           </div>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '0.5rem' }}>
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-main)' }}>
             Document Submission Rejected
           </h2>
           <p style={{ color: 'var(--text-muted)', maxWidth: 550, margin: '0 auto 1rem' }}>
             The document status was transitioned to <strong>Failed</strong> and the student has been notified to re-submit an official readable certificate.
           </p>
-          <div style={{ maxWidth: 500, margin: '0 auto 2rem', background: 'rgba(244,63,94,0.1)', padding: '0.75rem 1rem', borderRadius: 8, border: '1px solid rgba(244,63,94,0.25)', fontSize: '0.85rem', color: 'var(--accent-rose)' }}>
+          <div style={{ maxWidth: 500, margin: '0 auto 2rem', background: 'var(--status-rose-tint)', padding: '0.75rem 1rem', borderRadius: 8, border: '1px solid rgba(244,63,94,0.3)', fontSize: '0.85rem', color: '#fda4af' }}>
             Reason: {rejectionReason}
           </div>
           <Link to="/issuer" className="btn btn-secondary">
@@ -287,18 +298,20 @@ export function ReviewScreen() {
                 <button
                   type="button"
                   className={`persona-btn ${activeViewerTab === 'scan' ? 'active' : ''}`}
-                  style={activeViewerTab === 'scan' ? { background: 'var(--primary)', color: '#fff', borderColor: 'var(--primary)' } : {}}
+                  style={activeViewerTab === 'scan' ? { background: 'var(--ice-blue-deep)', color: '#fff', borderColor: 'var(--ice-blue)' } : {}}
                   onClick={() => setActiveViewerTab('scan')}
                 >
-                  📄 Document Scan
+                  <IconFileText size={14} />
+                  <span>Document Scan</span>
                 </button>
                 <button
                   type="button"
                   className={`persona-btn ${activeViewerTab === 'mock' ? 'active' : ''}`}
-                  style={activeViewerTab === 'mock' ? { background: 'var(--primary)', color: '#fff', borderColor: 'var(--primary)' } : {}}
+                  style={activeViewerTab === 'mock' ? { background: 'var(--ice-blue-deep)', color: '#fff', borderColor: 'var(--ice-blue)' } : {}}
                   onClick={() => setActiveViewerTab('mock')}
                 >
-                  🎓 Extracted Preview
+                  <IconGraduationCap size={14} />
+                  <span>Extracted Preview</span>
                 </button>
               </div>
 
@@ -307,9 +320,10 @@ export function ReviewScreen() {
                   href={readSasUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                  style={{ fontSize: '0.75rem', color: 'var(--ice-blue-light)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                 >
-                  Open Scan in Tab ↗
+                  <span>Open Scan in Tab</span>
+                  <IconExternalLink size={12} />
                 </a>
               )}
             </div>
@@ -323,7 +337,9 @@ export function ReviewScreen() {
                 />
               ) : (
                 <div className="certificate-mock-view">
-                  <div className="cert-seal">★</div>
+                  <div className="cert-seal">
+                    <IconShield size={24} color="#ffffff" />
+                  </div>
                   <div className="cert-uni-name">
                     NATIONAL INSTITUTE OF TECHNOLOGY
                   </div>
@@ -384,7 +400,7 @@ export function ReviewScreen() {
             </div>
 
             {jobMeta?.blob_key && (
-              <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--slate-blue-light)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 Source Blob: <code>{jobMeta.blob_key}</code>
               </div>
             )}
@@ -394,7 +410,7 @@ export function ReviewScreen() {
           <div className="glass-panel" id="review-fields-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
                   Extracted Record & Confidence Audit
                 </h3>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -402,7 +418,7 @@ export function ReviewScreen() {
                 </p>
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Threshold: <span style={{ color: 'var(--accent-emerald)', fontWeight: 700 }}>≥ {(confidences.threshold * 100).toFixed(0)}%</span>
+                Threshold: <span style={{ color: '#6ee7b7', fontWeight: 700 }}>&ge; {(confidences.threshold * 100).toFixed(0)}%</span>
               </div>
             </div>
 
@@ -411,14 +427,13 @@ export function ReviewScreen() {
               <div className="form-label">
                 <span>Student Full Name</span>
                 <span className={`confidence-indicator ${(confidences.fields?.name ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
-                  {(confidences.fields?.name ?? 1) < confidences.threshold && '⚠️ '}
-                  Confidence: {((confidences.fields?.name ?? 1) * 100).toFixed(0)}%
+                  {(confidences.fields?.name ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
+                  <span>Confidence: {((confidences.fields?.name ?? 1) * 100).toFixed(0)}%</span>
                 </span>
               </div>
               <input
                 id="input-student-name"
-                className="form-input"
-                style={{ borderColor: (confidences.fields?.name ?? 1) < confidences.threshold ? 'var(--accent-amber)' : undefined }}
+                className={`form-input ${(confidences.fields?.name ?? 1) < confidences.threshold ? 'input-flagged' : ''}`}
                 type="text"
                 value={formData.name}
                 onChange={(e) => handleInputChange('name', e.target.value)}
@@ -426,20 +441,19 @@ export function ReviewScreen() {
             </div>
 
             {/* Two-column layout for Roll & Register Number */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
               {/* Field: Roll Number */}
               <div className="form-group">
                 <div className="form-label">
                   <span>Roll Number</span>
                   <span className={`confidence-indicator ${(confidences.fields?.roll_number ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
-                    {(confidences.fields?.roll_number ?? 1) < confidences.threshold && '⚠️ '}
-                    {((confidences.fields?.roll_number ?? 1) * 100).toFixed(0)}%
+                    {(confidences.fields?.roll_number ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
+                    <span>{((confidences.fields?.roll_number ?? 1) * 100).toFixed(0)}%</span>
                   </span>
                 </div>
                 <input
                   id="input-student-id"
-                  className="form-input"
-                  style={{ borderColor: (confidences.fields?.roll_number ?? 1) < confidences.threshold ? 'var(--accent-amber)' : undefined }}
+                  className={`form-input ${(confidences.fields?.roll_number ?? 1) < confidences.threshold ? 'input-flagged' : ''}`}
                   type="text"
                   value={formData.roll_number}
                   onChange={(e) => handleInputChange('roll_number', e.target.value)}
@@ -451,14 +465,13 @@ export function ReviewScreen() {
                 <div className="form-label">
                   <span>Register Number</span>
                   <span className={`confidence-indicator ${(confidences.fields?.register_number ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
-                    {(confidences.fields?.register_number ?? 1) < confidences.threshold && '⚠️ '}
-                    {((confidences.fields?.register_number ?? 1) * 100).toFixed(0)}%
+                    {(confidences.fields?.register_number ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
+                    <span>{((confidences.fields?.register_number ?? 1) * 100).toFixed(0)}%</span>
                   </span>
                 </div>
                 <input
                   id="input-register-number"
-                  className="form-input"
-                  style={{ borderColor: (confidences.fields?.register_number ?? 1) < confidences.threshold ? 'var(--accent-amber)' : undefined }}
+                  className={`form-input ${(confidences.fields?.register_number ?? 1) < confidences.threshold ? 'input-flagged' : ''}`}
                   type="text"
                   value={formData.register_number}
                   onChange={(e) => handleInputChange('register_number', e.target.value)}
@@ -471,14 +484,13 @@ export function ReviewScreen() {
               <div className="form-label">
                 <span>Degree Conferred</span>
                 <span className={`confidence-indicator ${(confidences.fields?.degree ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
-                  {(confidences.fields?.degree ?? 1) < confidences.threshold && '⚠️ '}
-                  Confidence: {((confidences.fields?.degree ?? 1) * 100).toFixed(0)}%
+                  {(confidences.fields?.degree ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
+                  <span>Confidence: {((confidences.fields?.degree ?? 1) * 100).toFixed(0)}%</span>
                 </span>
               </div>
               <input
                 id="input-degree-title"
-                className="form-input"
-                style={{ borderColor: (confidences.fields?.degree ?? 1) < confidences.threshold ? 'var(--accent-amber)' : undefined }}
+                className={`form-input ${(confidences.fields?.degree ?? 1) < confidences.threshold ? 'input-flagged' : ''}`}
                 type="text"
                 value={formData.degree}
                 onChange={(e) => handleInputChange('degree', e.target.value)}
@@ -486,20 +498,19 @@ export function ReviewScreen() {
             </div>
 
             {/* Two-column layout for CGPA & Issue Date */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
               {/* Field: CGPA / Grade */}
               <div className="form-group">
                 <div className="form-label">
                   <span>CGPA / Grade</span>
                   <span className={`confidence-indicator ${(confidences.fields?.cgpa ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
-                    {(confidences.fields?.cgpa ?? 1) < confidences.threshold && '⚠️ '}
-                    Confidence: {((confidences.fields?.cgpa ?? 1) * 100).toFixed(0)}%
+                    {(confidences.fields?.cgpa ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
+                    <span>Confidence: {((confidences.fields?.cgpa ?? 1) * 100).toFixed(0)}%</span>
                   </span>
                 </div>
                 <input
                   id="input-cgpa"
-                  className="form-input"
-                  style={{ borderColor: (confidences.fields?.cgpa ?? 1) < confidences.threshold ? 'var(--accent-amber)' : undefined }}
+                  className={`form-input ${(confidences.fields?.cgpa ?? 1) < confidences.threshold ? 'input-flagged' : ''}`}
                   type="text"
                   value={formData.cgpa}
                   onChange={(e) => handleInputChange('cgpa', e.target.value)}
@@ -511,14 +522,13 @@ export function ReviewScreen() {
                 <div className="form-label">
                   <span>Conferral Date (ISO)</span>
                   <span className={`confidence-indicator ${(confidences.fields?.issue_date ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
-                    {(confidences.fields?.issue_date ?? 1) < confidences.threshold && '⚠️ '}
-                    Confidence: {((confidences.fields?.issue_date ?? 1) * 100).toFixed(0)}%
+                    {(confidences.fields?.issue_date ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
+                    <span>Confidence: {((confidences.fields?.issue_date ?? 1) * 100).toFixed(0)}%</span>
                   </span>
                 </div>
                 <input
                   id="input-graduation-date"
-                  className="form-input"
-                  style={{ borderColor: (confidences.fields?.issue_date ?? 1) < confidences.threshold ? 'var(--accent-amber)' : undefined }}
+                  className={`form-input ${(confidences.fields?.issue_date ?? 1) < confidences.threshold ? 'input-flagged' : ''}`}
                   type="text"
                   placeholder="YYYY-MM-DD"
                   value={formData.issue_date}
@@ -529,7 +539,7 @@ export function ReviewScreen() {
 
             {/* Tabular Marks Section */}
             <div className="form-group" style={{ marginTop: '0.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <label className="form-label" style={{ marginBottom: 0 }}>
                   <span>Tabular Transcript Marks ({formData.marks.length} courses)</span>
                 </label>
@@ -603,9 +613,9 @@ export function ReviewScreen() {
                             <button
                               type="button"
                               onClick={() => handleRemoveMarkRow(idx)}
-                              style={{ background: 'transparent', border: 'none', color: 'var(--accent-rose)', cursor: 'pointer', fontSize: '0.9rem' }}
+                              style={{ background: 'transparent', border: 'none', color: 'var(--status-rose)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
                             >
-                              ✕
+                              <IconX size={12} />
                             </button>
                           </td>
                         </tr>
@@ -631,7 +641,7 @@ export function ReviewScreen() {
             </div>
 
             {/* Human in the loop decision actions */}
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.75rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.75rem', flexWrap: 'wrap' }}>
               <button
                 id="btn-approve-credential"
                 className="btn btn-success"
@@ -639,7 +649,8 @@ export function ReviewScreen() {
                 disabled={saving || loading}
                 onClick={handleApprove}
               >
-                {saving ? 'Sealing & Anchoring Proof...' : 'Approve & Issue Certificate ✓'}
+                <IconCheck size={16} />
+                <span>{saving ? 'Sealing & Anchoring Proof...' : 'Approve & Issue Certificate'}</span>
               </button>
               <button
                 id="btn-reject-credential"
@@ -647,7 +658,8 @@ export function ReviewScreen() {
                 disabled={saving || loading}
                 onClick={() => setShowRejectModal(true)}
               >
-                Reject ✕
+                <IconX size={16} />
+                <span>Reject</span>
               </button>
             </div>
           </div>
@@ -658,7 +670,7 @@ export function ReviewScreen() {
       {showRejectModal && (
         <div className="modal-overlay" onClick={() => setShowRejectModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--accent-rose)' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', color: '#fda4af' }}>
               Reject Credential Submission
             </h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>

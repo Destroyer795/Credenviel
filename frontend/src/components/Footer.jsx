@@ -1,15 +1,19 @@
 import React from 'react'
+import { IconShield } from './Icons'
 
 export function Footer() {
   return (
     <footer className="app-footer">
-      <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <strong>Credenviel</strong> — Enterprise Certificate Digitization & Verification Pipeline
+      <div style={{ maxWidth: '1320px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <IconShield size={16} color="var(--ice-blue)" />
+          <strong style={{ color: 'var(--text-main)' }}>Credenviel</strong>
+          <span style={{ color: 'var(--slate-blue-light)' }}>|</span>
+          <span style={{ color: 'var(--text-muted)' }}>Cryptographic Credential Pipeline</span>
         </div>
-        <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8rem' }}>
+        <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.78rem', color: 'var(--slate-blue-light)', flexWrap: 'wrap' }}>
           <span>Azure Container Apps (Go & Python)</span>
-          <span>Azure Blob Storage</span>
+          <span>Blob Storage SAS</span>
           <span>Azure Service Bus</span>
           <span>Azure Key Vault HSM</span>
           <span>PostgreSQL Flexible Server</span>

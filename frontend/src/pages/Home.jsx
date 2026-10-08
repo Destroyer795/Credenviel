@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { checkHealth } from '../api/client'
-import { useAuth } from '../auth/AuthContext'
+import {
+  IconShield,
+  IconGraduationCap,
+  IconBuilding,
+  IconScale,
+  IconCloudUpload,
+  IconCpu,
+  IconLock,
+  IconCheckCircle,
+  IconActivity,
+  IconDatabase,
+  IconArrowRight,
+  IconSparkles,
+} from '../components/Icons'
 
 export function Home() {
-  const { isStudent } = useAuth()
   const [apiOnline, setApiOnline] = useState(null)
+  const [activeStep, setActiveStep] = useState(3)
 
   useEffect(() => {
     checkHealth().then(setApiOnline)
@@ -13,98 +26,245 @@ export function Home() {
 
   return (
     <div className="page-container">
-      <div style={{ textAlign: 'center', maxWidth: '850px', margin: '1rem auto 3.5rem' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.85rem', background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: '999px', fontSize: '0.8rem', color: '#a5b4fc', marginBottom: '1.25rem' }}>
-          <span>Azure Native Architecture</span>
-          <span>•</span>
-          <span style={{ color: apiOnline ? '#10b981' : apiOnline === false ? '#f43f5e' : '#94a3b8' }}>
-            {apiOnline ? '● Backend API Connected' : apiOnline === false ? '○ Backend API Standby' : 'Checking Health...'}
+      {/* Hero Section */}
+      <div className="hero-wrapper">
+        <div className="hero-pill-tag">
+          <IconActivity size={14} color="var(--ice-blue)" />
+          <span>Azure Zero-Trust Architecture</span>
+          <span style={{ color: 'var(--slate-blue-light)' }}>•</span>
+          <span style={{ color: apiOnline ? 'var(--status-emerald)' : apiOnline === false ? 'var(--status-rose)' : 'var(--slate-blue-light)' }}>
+            {apiOnline ? 'Backend API Active' : apiOnline === false ? 'API Standby (Interactive Demo)' : 'Checking Health...'}
           </span>
         </div>
 
-        <h1 style={{ fontSize: '3rem', fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1.15, marginBottom: '1.25rem' }}>
-          Zero-Trust Certificate Digitization & Cryptographic Verification
+        <h1 className="hero-title">
+          Cryptographic Certificate Digitization & <span className="hero-title-highlight">Tamper-Evident Verification</span>
         </h1>
 
-        <p style={{ fontSize: '1.15rem', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '2.5rem' }}>
-          Credenviel is an event-driven, cloud-native document pipeline that ingests academic credentials, extracts structured records using OCR, flags low-confidence anomalies for human review, and seals tamper-evident proofs.
+        <p className="hero-desc">
+          Cloud-native event pipeline ingesting academic credentials via direct SAS storage, extracting records with dual-engine OCR, enforcing registrar human-in-the-loop review, and sealing immutable SHA-256 proofs.
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <div className="hero-cta-group">
           <Link to="/student" className="btn btn-primary" id="btn-hero-student">
-            🎓 Open Student Portal
+            <IconGraduationCap size={18} />
+            <span>Submit Document</span>
           </Link>
           <Link to="/issuer" className="btn btn-secondary" id="btn-hero-issuer">
-            🏛️ Open Issuer Dashboard
+            <IconBuilding size={18} />
+            <span>Registrar Dashboard</span>
           </Link>
           <Link to="/verify/demo-cert" className="btn btn-secondary" id="btn-hero-verify">
-            🛡️ Verify Certificate
+            <IconShield size={18} />
+            <span>Verify Credential</span>
           </Link>
         </div>
+
+        {/* Live Interactive Pipeline Preview Card */}
+        <div className="hero-pipeline-preview">
+          <div className="pipeline-preview-header">
+            <div className="pipeline-terminal-dots">
+              <div className="terminal-dot dot-red" />
+              <div className="terminal-dot dot-amber" />
+              <div className="terminal-dot dot-green" />
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--slate-blue-light)' }}>
+              PIPELINE TELEMETRY: AZURE_SERVICE_BUS // SESSION_DISPATCH
+            </div>
+          </div>
+
+          <div className="pipeline-flow-chips">
+            <div
+              className={`pipeline-chip ${activeStep === 1 ? 'active' : ''}`}
+              onClick={() => setActiveStep(1)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="chip-step-num">Step 01</div>
+              <div className="chip-step-title">Direct Blob SAS</div>
+              <div className="chip-step-sub">0 ms API compute ingest</div>
+            </div>
+
+            <div
+              className={`pipeline-chip ${activeStep === 2 ? 'active' : ''}`}
+              onClick={() => setActiveStep(2)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="chip-step-num">Step 02</div>
+              <div className="chip-step-title">Event Grid Routing</div>
+              <div className="chip-step-sub">Decoupled queue dispatch</div>
+            </div>
+
+            <div
+              className={`pipeline-chip ${activeStep === 3 ? 'active' : ''}`}
+              onClick={() => setActiveStep(3)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="chip-step-num">Step 03</div>
+              <div className="chip-step-title">Dual-Engine OCR</div>
+              <div className="chip-step-sub">0.85 Confidence threshold</div>
+            </div>
+
+            <div
+              className={`pipeline-chip ${activeStep === 4 ? 'active' : ''}`}
+              onClick={() => setActiveStep(4)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="chip-step-num">Step 04</div>
+              <div className="chip-step-title">QR & HSM Seal</div>
+              <div className="chip-step-sub">SHA-256 tamper proof</div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Feature Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
-        <div className="glass-panel">
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(56, 189, 248, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38bdf8', marginBottom: '1rem', fontSize: '1.25rem' }}>
-            ☁️
+      {/* Performance & Architectural Metrics Ribbon */}
+      <div className="metrics-ribbon">
+        <div className="metric-stat-card">
+          <div className="metric-stat-value">0.0 ms</div>
+          <div className="metric-stat-label">API Compute Ingest</div>
+          <div className="metric-stat-sub">Direct client-to-blob SAS PUT</div>
+        </div>
+        <div className="metric-stat-card">
+          <div className="metric-stat-value">&lt; 1.2s</div>
+          <div className="metric-stat-label">Queue Latency</div>
+          <div className="metric-stat-sub">Azure Service Bus messaging</div>
+        </div>
+        <div className="metric-stat-card">
+          <div className="metric-stat-value">0.85</div>
+          <div className="metric-stat-label">Confidence Threshold</div>
+          <div className="metric-stat-sub">Registrar audit review gate</div>
+        </div>
+        <div className="metric-stat-card">
+          <div className="metric-stat-value">256-bit</div>
+          <div className="metric-stat-label">Cryptographic Proofs</div>
+          <div className="metric-stat-sub">SHA-256 canonical hashing</div>
+        </div>
+      </div>
+
+      {/* Core Architectural Pillars Grid */}
+      <div className="features-grid">
+        <div className="feature-box">
+          <div className="feature-icon-wrapper">
+            <IconCloudUpload size={22} />
           </div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem' }}>Direct-to-Blob Uploads</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-            Client uploads bypass the API compute layer entirely via short-lived Azure Blob Storage SAS tokens with strict mime-type and size bounds.
+          <h3 className="feature-title">Direct-to-Blob Zero Compute Ingest</h3>
+          <p className="feature-desc">
+            Client document payloads bypass the API compute layer entirely using short-lived Azure Blob Storage SAS tokens with strict mime-type constraints and 4 MB limits.
           </p>
         </div>
 
-        <div className="glass-panel">
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#818cf8', marginBottom: '1rem', fontSize: '1.25rem' }}>
-            ⚡
+        <div className="feature-box">
+          <div className="feature-icon-wrapper">
+            <IconCpu size={22} />
           </div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem' }}>Asynchronous Event Processing</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-            Azure Event Grid notifies serverless Azure Functions upon blob creation, enqueueing jobs onto Azure Service Bus for Python worker auto-scaling via KEDA.
+          <h3 className="feature-title">Event-Driven Asynchronous Pipeline</h3>
+          <p className="feature-desc">
+            Azure Event Grid captures blob creations and triggers Azure Functions to enqueue jobs into Azure Service Bus, enabling KEDA worker auto-scaling from 0 to N replicas.
           </p>
         </div>
 
-        <div className="glass-panel">
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', marginBottom: '1rem', fontSize: '1.25rem' }}>
-            ⚖️
+        <div className="feature-box">
+          <div className="feature-icon-wrapper">
+            <IconScale size={22} />
           </div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem' }}>Human-in-the-Loop Review</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-            Records with extraction confidence below the 0.85 threshold are automatically flagged for registrar review in the split-screen comparison station.
+          <h3 className="feature-title">Registrar Human-in-the-Loop Gate</h3>
+          <p className="feature-desc">
+            Documents with optical character recognition confidence below 0.85 route to the split-screen review station for registrar verification, ledger audit, and approval.
+          </p>
+        </div>
+
+        <div className="feature-box">
+          <div className="feature-icon-wrapper">
+            <IconLock size={22} />
+          </div>
+          <h3 className="feature-title">Cryptographic Tamper Detection</h3>
+          <p className="feature-desc">
+            Canonical field normalization and SHA-256 source hashing guarantee that any subsequent alteration of marks, grades, or names renders the verification invalid.
           </p>
         </div>
       </div>
 
-      {/* Pipeline Flow Stepper Overview */}
-      <div className="glass-panel" style={{ padding: '2.5rem' }}>
-        <h3 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '0.5rem', textAlign: 'center' }}>
-          End-to-End Pipeline Architecture
-        </h3>
-        <p style={{ color: 'var(--text-muted)', textAlign: 'center', fontSize: '0.9rem', marginBottom: '2rem' }}>
-          From raw document submission to cryptographic verification
-        </p>
+      {/* End-to-End Visual Stepper */}
+      <div className="glass-panel" style={{ padding: '2.5rem', marginBottom: '3.5rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+          <h3 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.4rem' }}>
+            Verification Lifecycle Architecture
+          </h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+            From raw document ingestion to cryptographic verification
+          </p>
+        </div>
 
         <div className="stepper">
           <div className="step-item completed">
             <div className="step-circle">1</div>
-            <div className="step-label">SAS Request</div>
+            <div>
+              <div className="step-label">SAS Generation</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>API creates bounded token</div>
+            </div>
           </div>
           <div className="step-item completed">
             <div className="step-circle">2</div>
-            <div className="step-label">Direct Blob PUT</div>
+            <div>
+              <div className="step-label">Direct Storage PUT</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Bypasses web compute</div>
+            </div>
           </div>
           <div className="step-item completed">
             <div className="step-circle">3</div>
-            <div className="step-label">Event Grid & Queue</div>
+            <div>
+              <div className="step-label">Event Grid Queue</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Service Bus enqueue</div>
+            </div>
           </div>
           <div className="step-item completed">
             <div className="step-circle">4</div>
-            <div className="step-label">Worker OCR</div>
+            <div>
+              <div className="step-label">Worker OCR Extract</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Confidence score gate</div>
+            </div>
           </div>
           <div className="step-item active">
             <div className="step-circle">5</div>
-            <div className="step-label">Review / Proof</div>
+            <div>
+              <div className="step-label">Review or Seal</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>QR-stamped PDF output</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Institutional Trust & Security Standards */}
+      <div className="glass-panel" style={{ padding: '2.25rem', borderColor: 'var(--border-slate)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '2rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--ice-blue-light)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+              <IconLock size={16} />
+              <span>Azure Key Vault HSM</span>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Hardware security module key storage with role-based access control and managed identity isolation.
+            </p>
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--ice-blue-light)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+              <IconCheckCircle size={16} />
+              <span>FERPA Privacy Preserved</span>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Public verification endpoints omit student registration numbers and granular grade rosters by design.
+            </p>
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--ice-blue-light)', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+              <IconSparkles size={16} />
+              <span>Zero Cloud Cost Trap</span>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Offline mocks and serverless scale-to-zero configurations protect cloud credits during idle periods.
+            </p>
           </div>
         </div>
       </div>
