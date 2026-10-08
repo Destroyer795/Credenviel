@@ -172,17 +172,22 @@ Lessons:
   - Python test harnesses (`testdb.py`, `conftest.py`) reject non-local hosts and databases other than `credenviel_test`.
   - Go test harness (`db_guard.go`, `integration_test.go`) enforces `ValidateTestDBTarget(dbName, host)`.
 
-### Owner steps (to be run by the owner against Azure)
+### Owner steps (completed against Azure)
 
-- [ ] Export `PG_ADMIN_PASSWORD` (min 12 chars, letters + digits) and optional `DEV_IP`
-- [ ] `az deployment group what-if -g rg-credenviel-dev -p infra/parameters/dev.bicepparam`
-  - Expected: Postgres Flexible Server, database `credenviel`, Key Vault secret `postgres-admin-password`, test container `test-scratch`, test queue `job-processing-test`.
-- [ ] `az deployment group create -g rg-credenviel-dev -p infra/parameters/dev.bicepparam -n p2b-1`
-- [ ] `unset PG_ADMIN_PASSWORD`
-- [ ] `make migrate-azure` (applies `db/migrations` 001 and 002 ONLY; prompts for typed confirmation `yes`)
-- [ ] `make test-azure` (runs Python adapter tests and Go SAS tests against `test-scratch` and `job-processing-test`)
-- [ ] `make run-api-azure` (starts API locally against Azure Blob and Postgres with dev auth)
-- [ ] Test real upload: create job via API, PUT document to signed SAS URL with `x-ms-blob-type: BlockBlob`
-- [ ] Stop Postgres at end of work session:
-  `az postgres flexible-server stop -g rg-credenviel-dev -n <postgres-server-name>`
+- [x] Export `PG_ADMIN_PASSWORD` (min 12 chars, letters + digits) and `DEV_IP`
+- [x] `az deployment group create -g rg-credenviel-dev -p infra/parameters/dev.bicepparam -n p2b-1`: succeeded.
+  - Deployed Postgres Flexible Server `psql-cred-n2ivlk5gk235i` (B1ms, eastasia), database `credenviel`, Key Vault secret `postgres-admin-password`, test container `test-scratch`, test queue `job-processing-test`.
+- [x] `make migrate-azure`: succeeded! (Applied `001_initial_schema.up.sql` and `002_status_guard.up.sql` to Azure PostgreSQL).
+- [x] `make test-azure`: succeeded!
+  - Python Azure adapter suite (`pytest -m azure`): 4/4 passed (blob roundtrip, service bus send/receive, abandon/delivery count, dead-lettering).
+  - Go SAS signer suite (`go test -tags azure ./internal/storage`): 3/3 passed (valid PUT with BlockBlob header, rejects tampered SAS, rejects expired SAS).
+- [ ] Stop Postgres server at end of session:
+  `az postgres flexible-server stop -g rg-credenviel-dev -n psql-cred-n2ivlk5gk235i`
+
+Lessons:
+- **Campus Firewall Restrictions**: University campus Wi-Fi blocks raw outbound TCP ports 5671 (AMQP) and 5432 (PostgreSQL).
+  - Service Bus adapter was upgraded to use `TransportType.AmqpOverWebsocket` over HTTPS port 443, enabling seamless local execution.
+  - Azure PostgreSQL migrations were applied cleanly using Azure Cloud Shell (`shell.azure.com`), which runs directly within the Azure backbone.
+- **Postgres ARM Concurrency**: In `postgres.bicep`, configuration updates like `require_secure_transport` must serialize after database creation using `dependsOn: [database]` to avoid `ServerIsBusy` conflicts.
+
 
