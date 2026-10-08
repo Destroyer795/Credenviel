@@ -24,8 +24,36 @@ param location string = resourceGroup().location
 param environment string = 'dev'
 
 @description('Container image tag for API (used from Phase 3)')
-#disable-next-line no-unused-params
 param apiImageTag string = 'latest'
+
+@description('Deploy Go API Container App (Phase 3)')
+param deployApiApp bool = false
+
+@description('Deploy Static Web App for frontend (Phase 3)')
+param deployStaticWebApp bool = false
+
+@description('GitHub repository formatted as owner/repo for GitHub Actions federated credential (e.g. Destroyer795/Credenviel)')
+param githubRepo string = ''
+
+@description('Authentication mode for API (entra, jwt, dev)')
+param authMode string = 'entra'
+
+@description('Microsoft Entra ID Tenant ID')
+param entraTenantId string = ''
+
+@description('Microsoft Entra ID Client ID (App ID)')
+param entraClientId string = ''
+
+@description('Microsoft Entra ID Audience')
+param entraAudience string = ''
+
+@secure()
+@description('Symmetric secret for JWT fallback mode')
+param jwtSymmetricSecret string = ''
+
+@secure()
+@description('Shared internal API key for worker callbacks')
+param internalApiKey string = ''
 
 @description('Container image tag for Worker (read from WORKER_IMAGE_TAG env). Empty when apps not yet deployed.')
 param workerImageTag string = ''
@@ -208,8 +236,52 @@ module eventGrid 'modules/event-grid.bicep' = if (deployApps) {
   }
 }
 
+// Go API Container App (Phase 3)
+module apiApp 'modules/api-app.bicep' = if (deployApps && deployApiApp && !empty(apiImageTag)) {
+  name: 'api-app'
+  params: {
+    location: location
+    tags: tags
+    environment: environment
+    imageTag: apiImageTag
+    containerAppsEnvironmentId: containerAppsEnv.outputs.environmentId
+    identityId: identity.outputs.identityId
+    identityClientId: identity.outputs.identityClientId
+    registryLoginServer: acr.outputs.loginServer
+    registryUsername: existingAcr.listCredentials().username
+    registryPassword: existingAcr.listCredentials().passwords[0].value
+    storageAccountName: storage.outputs.storageAccountName
+    postgresPassword: existingKeyVault.getSecret('postgres-admin-password')
+    postgresFqdn: postgres.?outputs.serverFqdn ?? defaultPostgresFqdn
+    authMode: authMode
+    entraTenantId: entraTenantId
+    entraClientId: entraClientId
+    entraAudience: entraAudience
+    jwtSymmetricSecret: jwtSymmetricSecret
+    internalApiKey: !empty(internalApiKey) ? internalApiKey : 'credenviel-internal-worker-key-placeholder'
+  }
+}
+
+// Static Web App for Frontend (Phase 3)
+module staticWebApp 'modules/static-web-app.bicep' = if (deployStaticWebApp) {
+  name: 'static-web-app'
+  params: {
+    location: location
+    tags: tags
+  }
+}
+
+// Federated Identity Credential for GitHub Actions (Phase 3)
+module federatedIdentity 'modules/federated-identity.bicep' = if (!empty(githubRepo)) {
+  name: 'federated-identity'
+  params: {
+    identityName: identity.outputs.identityName
+    githubRepo: githubRepo
+    registryName: acr.outputs.registryName
+  }
+}
+
 // Stubs for future phases:
-//   api-app             (Phase 3)
 //   signalr             (Phase 5)
 
 // ---- Outputs: names and ids needed later (no secrets) ----
@@ -245,3 +317,9 @@ output workerAppName string = workerApp.?outputs.workerAppName ?? ''
 output functionAppName string = functionApp.?outputs.functionAppName ?? ''
 output functionAppId string = functionApp.?outputs.functionAppId ?? ''
 output eventGridTopicName string = eventGrid.?outputs.systemTopicName ?? ''
+// Phase 3 outputs
+output apiAppName string = apiApp.?outputs.apiAppName ?? ''
+output apiUrl string = apiApp.?outputs.apiUrl ?? ''
+output staticWebAppName string = staticWebApp.?outputs.staticWebAppName ?? ''
+output staticWebAppUrl string = staticWebApp.?outputs.staticWebAppUrl ?? ''
+output federatedBranchCredentialId string = federatedIdentity.?outputs.federatedBranchCredentialId ?? ''

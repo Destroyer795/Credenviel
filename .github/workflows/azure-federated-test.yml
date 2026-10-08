@@ -1,0 +1,30 @@
+name: Azure Passwordless Federated Auth Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test-oidc-auth:
+    name: Test Passwordless Azure Login
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Azure Login via Federated User-Assigned Managed Identity
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify Azure Access (Read-Only)
+        run: |
+          echo "=== Authenticated Identity ==="
+          az account show -o table
+          echo "=== Resource Group Status ==="
+          az group show -n rg-credenviel-dev --query "{name:name, location:location, state:properties.provisioningState}" -o json

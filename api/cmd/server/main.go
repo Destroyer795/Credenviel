@@ -28,12 +28,21 @@ func run(ctx context.Context, getenv func(string) string) error {
 		return errors.New("INTERNAL_API_KEY must not be empty")
 	}
 
-	if cfg.AuthMode == "dev" {
+	switch cfg.AuthMode {
+	case "dev":
 		if cfg.AppEnv != "local" {
 			return fmt.Errorf("AUTH_MODE=dev is only allowed when APP_ENV=local (got APP_ENV=%s)", cfg.AppEnv)
 		}
-	} else {
-		return fmt.Errorf("unsupported AUTH_MODE=%q (only 'dev' is supported in Phase 1)", cfg.AuthMode)
+	case "entra":
+		if cfg.EntraTenantID == "" || cfg.EntraClientID == "" {
+			return errors.New("ENTRA_TENANT_ID and ENTRA_CLIENT_ID must not be empty when AUTH_MODE=entra")
+		}
+	case "jwt":
+		if cfg.JWTSymmetricSecret == "" && cfg.EntraTenantID == "" {
+			return errors.New("JWT_SYMMETRIC_SECRET or ENTRA_TENANT_ID must not be empty when AUTH_MODE=jwt")
+		}
+	default:
+		return fmt.Errorf("unsupported AUTH_MODE=%q (supported: 'dev', 'entra', 'jwt')", cfg.AuthMode)
 	}
 
 	database, err := db.New(ctx, cfg.DatabaseURL)

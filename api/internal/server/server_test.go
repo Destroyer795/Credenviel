@@ -3,6 +3,9 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -318,3 +321,93 @@ func TestDevUpload_Unit(t *testing.T) {
 		t.Errorf("expected 409 for job not in awaiting_upload, got %d", rec.Code)
 	}
 }
+
+func TestServer_JWTAuthRoutes(t *testing.T) {
+	secret := "super-secure-symmetric-key-for-testing-jwt-routes-32chars"
+	cfg := &config.Config{
+		AuthMode:           "jwt",
+		AppEnv:             "local",
+		JWTSymmetricSecret: secret,
+		MaxUploadBytes:     4194304,
+		InternalAPIKey:     "secret-key",
+	}
+
+	uStore := &memoryUserStore{users: make(map[string]auth.User)}
+	jRepo := &memoryJobRepo{jobs: make(map[string]*jobs.Job)}
+	mStore := &memoryStore{data: make(map[string][]byte)}
+	mSigner := storage.NewLocalSigner("http://127.0.0.1:8080")
+
+	srv := NewServer(cfg, uStore, jRepo, mStore, mSigner)
+
+	// Helper to generate a test JWT
+	makeToken := func(oid, role, name string) string {
+		claims := map[string]any{
+			"oid":   oid,
+			"roles": []string{role},
+			"name":  name,
+			"exp":   time.Now().Add(1 * time.Hour).Unix(),
+		}
+		// manual JWT creation or helper
+		tok := auth.NewJWTIdentitySource(auth.JWTConfig{SymmetricSecret: secret})
+		_ = tok
+		// Sign HS256
+		header := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" // {"alg":"HS256","typ":"JWT"}
+		claimsBytes, _ := json.Marshal(claims)
+		claimsEncoded := strings.TrimRight(base64.URLEncoding.EncodeToString(claimsBytes), "=")
+		toSign := header + "." + claimsEncoded
+		// use crypto hmac
+		h := hmacSHA256([]byte(toSign), []byte(secret))
+		sigEncoded := strings.TrimRight(base64.URLEncoding.EncodeToString(h), "=")
+		return toSign + "." + sigEncoded
+	}
+
+	// 1. Unauthenticated request => 401
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/jobs", strings.NewReader(`{"filename":"cert.pdf","content_type":"application/pdf","size_bytes":100}`))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated request, got %d", rec.Code)
+	}
+
+	// 2. Authenticated Student request => 201
+	studentToken := makeToken("student-oid-1", "Student", "Bob Student")
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/jobs", strings.NewReader(`{"filename":"cert.pdf","content_type":"application/pdf","size_bytes":100}`))
+	req.Header.Set("Authorization", "Bearer "+studentToken)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for valid student JWT, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var created createJobResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// 3. Different student reading job => 404 (D-026)
+	otherStudentToken := makeToken("student-oid-2", "Student", "Charlie Student")
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/jobs/"+created.JobID, nil)
+	req.Header.Set("Authorization", "Bearer "+otherStudentToken)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for other student reading job, got %d", rec.Code)
+	}
+
+	// 4. Issuer reading job => 200
+	issuerToken := makeToken("issuer-oid-1", "Issuer", "Dr. Registrar")
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/jobs/"+created.JobID, nil)
+	req.Header.Set("Authorization", "Bearer "+issuerToken)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for issuer reading student job, got %d", rec.Code)
+	}
+}
+
+func hmacSHA256(data, key []byte) []byte {
+	mac := hmac.New(sha256.New, key)
+	mac.Write(data)
+	return mac.Sum(nil)
+}
+
