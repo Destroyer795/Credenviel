@@ -60,16 +60,15 @@ export function Home() {
           </Link>
         </div>
 
-        {/* Live Interactive Pipeline Preview Card */}
-        <div className="hero-pipeline-preview">
+        {/* Live Interactive Pipeline Showcase */}
+        <div className="hero-pipeline-preview" id="pipeline-showcase">
           <div className="pipeline-preview-header">
-            <div className="pipeline-terminal-dots">
-              <div className="terminal-dot dot-red" />
-              <div className="terminal-dot dot-amber" />
-              <div className="terminal-dot dot-green" />
+            <div className="pipeline-header-badge">
+              <IconActivity size={16} color="var(--soft-blue)" />
+              <span>Asynchronous Processing Pipeline</span>
             </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--slate-blue-light)' }}>
-              PIPELINE TELEMETRY: AZURE_SERVICE_BUS // SESSION_DISPATCH
+            <div className="pipeline-header-indicator">
+              <span>Interactive Step {activeStep} of 4</span>
             </div>
           </div>
 
@@ -77,7 +76,9 @@ export function Home() {
             <div
               className={`pipeline-chip ${activeStep === 1 ? 'active' : ''}`}
               onClick={() => setActiveStep(1)}
-              style={{ cursor: 'pointer' }}
+              role="button"
+              tabIndex={0}
+              id="pipeline-step-1"
             >
               <div className="chip-step-num">Step 01</div>
               <div className="chip-step-title">Direct Blob SAS</div>
@@ -87,7 +88,9 @@ export function Home() {
             <div
               className={`pipeline-chip ${activeStep === 2 ? 'active' : ''}`}
               onClick={() => setActiveStep(2)}
-              style={{ cursor: 'pointer' }}
+              role="button"
+              tabIndex={0}
+              id="pipeline-step-2"
             >
               <div className="chip-step-num">Step 02</div>
               <div className="chip-step-title">Event Grid Routing</div>
@@ -97,7 +100,9 @@ export function Home() {
             <div
               className={`pipeline-chip ${activeStep === 3 ? 'active' : ''}`}
               onClick={() => setActiveStep(3)}
-              style={{ cursor: 'pointer' }}
+              role="button"
+              tabIndex={0}
+              id="pipeline-step-3"
             >
               <div className="chip-step-num">Step 03</div>
               <div className="chip-step-title">Dual-Engine OCR</div>
@@ -107,12 +112,37 @@ export function Home() {
             <div
               className={`pipeline-chip ${activeStep === 4 ? 'active' : ''}`}
               onClick={() => setActiveStep(4)}
-              style={{ cursor: 'pointer' }}
+              role="button"
+              tabIndex={0}
+              id="pipeline-step-4"
             >
               <div className="chip-step-num">Step 04</div>
               <div className="chip-step-title">QR & HSM Seal</div>
               <div className="chip-step-sub">SHA-256 tamper proof</div>
             </div>
+          </div>
+
+          {/* Interactive Step Detail Inspector */}
+          <div className="pipeline-step-detail">
+            <div className="pipeline-detail-header">
+              <div className="pipeline-detail-title">
+                <span className="pipeline-detail-tag">
+                  {activeStep === 1 ? 'Direct-to-Storage Ingest' : activeStep === 2 ? 'Asynchronous Decoupling' : activeStep === 3 ? 'Human-in-the-Loop Gate' : 'Cryptographic Integrity'}
+                </span>
+                <strong>
+                  {activeStep === 1 ? 'Zero-Compute Client Upload' : activeStep === 2 ? 'Azure Service Bus Queue' : activeStep === 3 ? 'Dual-Engine OCR & Verification' : 'SHA-256 Stamp & HSM Signing'}
+                </strong>
+              </div>
+              <div className="pipeline-detail-metric">
+                {activeStep === 1 ? '0.0 ms API Latency' : activeStep === 2 ? '< 1.2s Queue Dispatch' : activeStep === 3 ? '0.85 Confidence Threshold' : '256-bit Immutable Seal'}
+              </div>
+            </div>
+            <p className="pipeline-detail-desc">
+              {activeStep === 1 && 'Client payloads upload directly to Azure Blob Storage via short-lived SAS tokens with strict mime-type validation and 4 MB limits, completely bypassing API web servers.'}
+              {activeStep === 2 && 'Azure Event Grid captures storage container creation events and triggers serverless functions to enqueue processing tasks to Azure Service Bus with guaranteed delivery.'}
+              {activeStep === 3 && 'High-accuracy OCR extracts transcript records. Extractions with confidence scores below 0.85 automatically route to the registrar review station for human verification.'}
+              {activeStep === 4 && 'Canonical normalization generates an immutable SHA-256 hash sealed by Azure Key Vault HSM keys, embedded directly into a tamper-evident PDF with a public verification QR code.'}
+            </p>
           </div>
         </div>
       </div>
