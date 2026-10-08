@@ -44,8 +44,12 @@ func (d DevHeaderSource) Identify(r *http.Request) (Identity, error) {
 	role := strings.TrimSpace(r.Header.Get("X-Dev-Role"))
 	name := strings.TrimSpace(r.Header.Get("X-Dev-Name"))
 
-	if entraID == "" || role == "" || name == "" {
-		return Identity{}, errors.New("missing required dev auth headers (X-Dev-User, X-Dev-Role, X-Dev-Name)")
+	if entraID == "" || role == "" {
+		return Identity{}, errors.New("missing required dev auth headers (X-Dev-User, X-Dev-Role)")
+	}
+
+	if name == "" {
+		name = entraID
 	}
 
 	if role != "issuer" && role != "student" {

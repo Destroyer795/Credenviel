@@ -1,4 +1,4 @@
-.PHONY: up down setup migrate migrate-down migrate-local run-api run-worker simulate-upload test test-integration test-azure run-api-azure migrate-azure demo lint
+.PHONY: up down setup migrate migrate-down migrate-local run-api run-worker simulate-upload test test-integration test-azure run-api-azure migrate-azure package-function e2e-azure scale-test-azure demo lint
 
 # Start local Postgres + Azurite (credenviel- containers only)
 up:
@@ -78,7 +78,20 @@ migrate-azure:
 demo:
 	python scripts/demo.py
 
+# Package Azure Function App into deployable zip
+package-function:
+	python scripts/package_function.py
+
+# Run end-to-end verification against Azure pipeline
+e2e-azure:
+	python scripts/e2e_azure.py --start-api
+
+# Run KEDA scale verification test against Azure pipeline
+scale-test-azure:
+	python scripts/scale_test_azure.py --start-api
+
 # Lint all code
 lint:
 	@echo "TODO: Configure linters (golangci-lint, ruff, eslint)"
+
 
