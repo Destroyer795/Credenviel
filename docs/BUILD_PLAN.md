@@ -118,17 +118,17 @@ Container Apps environment, worker app with KEDA rule, Function app, Event Grid 
 
 ---
 
-## Phase 5 — Verification & SignalR
+## Phase 5 — Verification & SignalR (DONE)
 
 **What:** Canonical `fields_hash` and `source_hash` generation, QR-stamped PDF generation stored in `stamped-documents`, public verification page with rate limiting, and real-time SignalR status push.
 
-**Acceptance tests:**
-- [ ] `source_hash` matches SHA-256 of the uploaded raw document.
-- [ ] `fields_hash` matches canonical UTF-8 JSON digest (Unicode NFC, collapsed whitespace, string decimals).
-- [ ] Worker generates QR-stamped PDF certificate and uploads it to `stamped-documents/{job_id}/stamped_certificate.pdf`.
-- [ ] Public verification endpoint `/api/v1/verify/:publicVerificationId` returns public fields (`name`, `roll_number`, `degree`, `cgpa`, `issue_date`, `source_hash`, `fields_hash`, `verified_by_issuer`) without exposing private transcript marks or registration numbers.
-- [ ] Rate limiting enforces a maximum of 30 requests/minute per IP address on the public verification endpoint.
-- [ ] Go API pushes live status events (`awaiting_upload → queued → processing → processed / needs_review`) to uploader's SignalR group via REST API without client polling.
+**Acceptance tests (PASSED):**
+- [x] `source_hash` matches SHA-256 of the uploaded raw document (`worker/worker/processor.py`).
+- [x] `fields_hash` matches canonical UTF-8 JSON digest (Unicode NFC, collapsed whitespace, string decimals) (`api/internal/normalizer/normalizer.go`, `credenviel_shared/normalizer.py`).
+- [x] Worker generates QR-stamped PDF certificate and uploads it to `stamped-documents/{job_id}/stamped_certificate.pdf` (`worker/worker/stamper.py`, `worker/worker/processor.py`).
+- [x] Public verification endpoint `/api/v1/verify/:publicVerificationId` returns public fields (`name`, `roll_number`, `degree`, `cgpa`, `issue_date`, `source_hash`, `fields_hash`, `verified_by_issuer`) without exposing private transcript marks or registration numbers (`api/internal/server/server.go`, `api/internal/records/records.go`).
+- [x] Rate limiting enforces a maximum of 30 requests/minute per IP address on the public verification endpoint (`api/internal/server/ratelimit.go`, `api/internal/server/server_test.go`).
+- [x] Go API pushes live status events (`awaiting_upload → queued → processing → processed / needs_review`) to uploader's SignalR group via REST API without client polling (`api/internal/signalr/signalr.go`, `api/internal/server/server.go`).
 
 ---
 

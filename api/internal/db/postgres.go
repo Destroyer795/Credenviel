@@ -227,6 +227,60 @@ func (d *DB) GetByJobID(ctx context.Context, jobID string) (*records.Record, err
 	return &r, nil
 }
 
+// GetByPublicVerificationID fetches a record by its public verification ID.
+func (d *DB) GetByPublicVerificationID(ctx context.Context, publicVerificationID string) (*records.Record, error) {
+	query := `
+		SELECT id, job_id, name, roll_number, register_number, degree,
+		       marks_json, cgpa::text, issue_date::text, confidence_json,
+		       source_hash, fields_hash, public_verification_id, verified_by_issuer,
+		       reviewed_by, reviewed_at, corrections_json, created_at
+		FROM records
+		WHERE public_verification_id = $1
+	`
+
+	var r records.Record
+	var marksBytes, confBytes, corrBytes []byte
+
+	err := d.pool.QueryRow(ctx, query, publicVerificationID).Scan(
+		&r.ID,
+		&r.JobID,
+		&r.Name,
+		&r.RollNumber,
+		&r.RegisterNumber,
+		&r.Degree,
+		&marksBytes,
+		&r.CGPA,
+		&r.IssueDate,
+		&confBytes,
+		&r.SourceHash,
+		&r.FieldsHash,
+		&r.PublicVerificationID,
+		&r.VerifiedByIssuer,
+		&r.ReviewedBy,
+		&r.ReviewedAt,
+		&corrBytes,
+		&r.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, records.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to get record by verification ID: %w", err)
+	}
+
+	if len(marksBytes) > 0 {
+		_ = json.Unmarshal(marksBytes, &r.MarksJSON)
+	}
+	if len(confBytes) > 0 {
+		_ = json.Unmarshal(confBytes, &r.ConfidenceJSON)
+	}
+	if len(corrBytes) > 0 {
+		_ = json.Unmarshal(corrBytes, &r.CorrectionsJSON)
+	}
+
+	return &r, nil
+}
+
 // Resolve confirms or corrects fields on a record, re-seals fields_hash, updates status to processed.
 func (d *DB) Resolve(ctx context.Context, jobID string, resolved records.ResolvedFields, fieldsHash string, diff map[string]any, reviewerID string) error {
 	tx, err := d.pool.Begin(ctx)

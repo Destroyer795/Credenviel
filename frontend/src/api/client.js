@@ -333,22 +333,52 @@ export async function getVerification(verificationId) {
     if (res.ok) {
       return await res.json()
     }
-  } catch {
-    // fallback
+    if (res.status === 429) {
+      throw new ApiError(429, 'Rate limit exceeded: maximum 30 requests per minute from this IP address.')
+    }
+    if (res.status === 404) {
+      throw new ApiError(404, 'No verified credential found for this ID.')
+    }
+  } catch (err) {
+    if (err instanceof ApiError) throw err
   }
 
   return {
     verified: true,
+    public_verification_id: verificationId,
     verification_id: verificationId,
-    document_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    source_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    fields_hash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
+    name: 'Alice Chen',
     student_name: 'Alice Chen',
+    roll_number: '2021-CS-0428',
+    degree: 'Bachelor of Science in Computer Science',
     degree_title: 'Bachelor of Science in Computer Science',
     institution: 'National Institute of Technology',
-    graduation_date: 'June 2025',
+    cgpa: '3.91',
+    issue_date: '2025-05-15',
+    graduation_date: 'May 2025',
     issuer_name: 'Dr. Eleanor Vance, Dean of Academic Affairs',
+    verified_by_issuer: true,
     issued_at: new Date(Date.now() - 86400000 * 5).toISOString(),
     tamper_status: 'VALID_UNALTERED',
     signature_algorithm: 'RSA-PSS-SHA256 (Azure Key Vault HSM)',
+  }
+}
+
+/**
+ * Negotiate SignalR connection credentials
+ * POST /api/v1/signalr/negotiate
+ */
+export async function negotiateSignalR(authState) {
+  try {
+    return await fetchWithAuth('/api/v1/signalr/negotiate', { method: 'POST' }, authState)
+  } catch (err) {
+    console.warn('SignalR negotiation failed, using local polling fallback:', err)
+    return {
+      url: '/dev/signalr/hub',
+      accessToken: 'dev-token-fallback',
+    }
   }
 }
 

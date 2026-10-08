@@ -19,6 +19,7 @@ import (
 	"github.com/Destroyer795/Credenviel/api/internal/config"
 	"github.com/Destroyer795/Credenviel/api/internal/jobs"
 	"github.com/Destroyer795/Credenviel/api/internal/records"
+	"github.com/Destroyer795/Credenviel/api/internal/signalr"
 	"github.com/Destroyer795/Credenviel/api/internal/storage"
 )
 
@@ -33,6 +34,15 @@ func (m *memoryRecordRepo) GetByJobID(ctx context.Context, jobID string) (*recor
 		return nil, records.ErrNotFound
 	}
 	return r, nil
+}
+
+func (m *memoryRecordRepo) GetByPublicVerificationID(ctx context.Context, publicVerificationID string) (*records.Record, error) {
+	for _, r := range m.records {
+		if r.PublicVerificationID == publicVerificationID {
+			return r, nil
+		}
+	}
+	return nil, records.ErrNotFound
 }
 
 func (m *memoryRecordRepo) Resolve(ctx context.Context, jobID string, resolved records.ResolvedFields, fieldsHash string, diff map[string]any, reviewerID string) error {
@@ -745,6 +755,224 @@ func TestDevPreview_Unit(t *testing.T) {
 	}
 	if !bytes.Equal(rec.Body.Bytes(), testBytes) {
 		t.Errorf("preview body mismatch")
+	}
+}
+
+func TestPublicVerify_SuccessAndPrivacy(t *testing.T) {
+	s, _, _, recordRepo, store := setupTestServer()
+
+	jobID := "job-verify-123"
+	pubID := "pub-verification-uuid-456"
+	name := "Alice Chen"
+	roll := "2021-CS-0428"
+	reg := "SECRET-REG-9999"
+	degree := "Bachelor of Science in Computer Science"
+	cgpa := "3.91"
+	issueDate := "2025-05-15"
+
+	recordRepo.records[jobID] = &records.Record{
+		ID:                   "rec-1",
+		JobID:                jobID,
+		PublicVerificationID: pubID,
+		Name:                 &name,
+		RollNumber:           &roll,
+		RegisterNumber:       &reg,
+		Degree:               &degree,
+		MarksJSON:            []any{map[string]any{"course": "CS101", "grade": "A"}},
+		CGPA:                 &cgpa,
+		IssueDate:            &issueDate,
+		SourceHash:           "src-hash-11223344",
+		FieldsHash:           "fields-hash-55667788",
+		VerifiedByIssuer:     true,
+		CreatedAt:            time.Now().UTC(),
+	}
+
+	stampedKey := fmt.Sprintf("stamped-documents/%s/stamped_certificate.pdf", jobID)
+	store.data[stampedKey] = []byte("%PDF-1.4 stamped certificate")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/verify/"+pubID, nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 1. Verify response struct
+	var pubResp records.PublicVerification
+	if err := json.Unmarshal(rec.Body.Bytes(), &pubResp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if !pubResp.Verified {
+		t.Errorf("expected verified=true")
+	}
+	if pubResp.PublicVerificationID != pubID {
+		t.Errorf("expected public_verification_id=%s, got %s", pubID, pubResp.PublicVerificationID)
+	}
+	if pubResp.Name == nil || *pubResp.Name != name {
+		t.Errorf("expected name=%s, got %v", name, pubResp.Name)
+	}
+	if pubResp.RollNumber == nil || *pubResp.RollNumber != roll {
+		t.Errorf("expected roll_number=%s, got %v", roll, pubResp.RollNumber)
+	}
+	if pubResp.Degree == nil || *pubResp.Degree != degree {
+		t.Errorf("expected degree=%s, got %v", degree, pubResp.Degree)
+	}
+	if pubResp.CGPA == nil || *pubResp.CGPA != cgpa {
+		t.Errorf("expected cgpa=%s, got %v", cgpa, pubResp.CGPA)
+	}
+	if pubResp.IssueDate == nil || *pubResp.IssueDate != issueDate {
+		t.Errorf("expected issue_date=%s, got %v", issueDate, pubResp.IssueDate)
+	}
+	if pubResp.SourceHash != "src-hash-11223344" || pubResp.FieldsHash != "fields-hash-55667788" {
+		t.Errorf("hash mismatch")
+	}
+	if !pubResp.VerifiedByIssuer {
+		t.Errorf("expected verified_by_issuer=true")
+	}
+
+	// 2. Strict Privacy Verification: private marks and register_number must NOT be in JSON!
+	var rawMap map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &rawMap); err != nil {
+		t.Fatalf("failed to decode raw json: %v", err)
+	}
+
+	if _, exists := rawMap["register_number"]; exists {
+		t.Errorf("PRIVACY VIOLATION: register_number exposed in public verification response!")
+	}
+	if _, exists := rawMap["marks_json"]; exists {
+		t.Errorf("PRIVACY VIOLATION: marks_json exposed in public verification response!")
+	}
+	if _, exists := rawMap["marks"]; exists {
+		t.Errorf("PRIVACY VIOLATION: marks exposed in public verification response!")
+	}
+}
+
+func TestPublicVerify_NotFound(t *testing.T) {
+	s, _, _, _, _ := setupTestServer()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/verify/non-existent-id", nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for unknown verification ID, got %d", rec.Code)
+	}
+}
+
+func TestPublicVerify_RateLimiting(t *testing.T) {
+	s, _, _, recordRepo, _ := setupTestServer()
+
+	pubID := "pub-rate-limit-test"
+	recordRepo.records["job-rl"] = &records.Record{
+		JobID:                "job-rl",
+		PublicVerificationID: pubID,
+		SourceHash:           "src",
+		FieldsHash:           "fld",
+	}
+
+	s.RateLimiter().Reset()
+
+	// 30 requests from 192.168.1.50 should succeed
+	for i := 1; i <= 30; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/verify/"+pubID, nil)
+		req.Header.Set("X-Forwarded-For", "192.168.1.50")
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d expected 200, got %d: %s", i, rec.Code, rec.Body.String())
+		}
+	}
+
+	// 31st request from same IP must be rate-limited (429)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/verify/"+pubID, nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.50")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request 31 expected 429 Too Many Requests, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Retry-After") != "60" {
+		t.Errorf("expected Retry-After 60, got %s", rec.Header().Get("Retry-After"))
+	}
+
+	// Request from a different IP should succeed
+	diffReq := httptest.NewRequest(http.MethodGet, "/api/v1/verify/"+pubID, nil)
+	diffReq.Header.Set("X-Forwarded-For", "10.0.0.1")
+	diffRec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(diffRec, diffReq)
+	if diffRec.Code != http.StatusOK {
+		t.Errorf("request from different IP expected 200, got %d", diffRec.Code)
+	}
+}
+
+func TestSignalR_NegotiateEndpoint(t *testing.T) {
+	s, _, _, _, _ := setupTestServer()
+
+	// 1. Unauthenticated request returns 401
+	unauthReq := httptest.NewRequest(http.MethodPost, "/api/v1/signalr/negotiate", nil)
+	unauthRec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(unauthRec, unauthReq)
+	if unauthRec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated negotiate, got %d", unauthRec.Code)
+	}
+
+	// 2. Authenticated request returns 200 with connection URL and accessToken
+	authReq := httptest.NewRequest(http.MethodPost, "/api/v1/signalr/negotiate", nil)
+	authReq.Header.Set("X-Dev-User", "student-alice")
+	authReq.Header.Set("X-Dev-Role", "student")
+	authReq.Header.Set("X-Dev-Name", "Alice Chen")
+	authRec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(authRec, authReq)
+
+	if authRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for negotiate, got %d: %s", authRec.Code, authRec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(authRec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode negotiate JSON: %v", err)
+	}
+	if resp["url"] == "" || resp["accessToken"] == "" {
+		t.Errorf("expected non-empty url and accessToken in negotiate response: %+v", resp)
+	}
+}
+
+func TestSignalR_BroadcastOnNotify(t *testing.T) {
+	s, _, jobRepo, _, _ := setupTestServer()
+
+	jobID := "job-sig-notify"
+	jobRepo.jobs[jobID] = &jobs.Job{
+		ID:         jobID,
+		Status:     "processing",
+		UploaderID: "user-uploader-123",
+	}
+
+	notifyBody := `{"status":"processed","job_id":"job-sig-notify"}`
+	req := httptest.NewRequest(http.MethodPost, "/internal/v1/jobs/"+jobID+"/notify", strings.NewReader(notifyBody))
+	req.Header.Set("X-Internal-Secret", "test-secret-123")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify dev signalr client recorded broadcast event
+	devSig, ok := s.SignalR().(*signalr.DevClient)
+	if !ok {
+		t.Fatalf("expected DevClient")
+	}
+	events := devSig.Events()
+	if len(events) == 0 {
+		t.Fatalf("expected at least 1 signalr broadcast event")
+	}
+
+	last := events[len(events)-1]
+	if last.JobID != jobID || last.Status != "processed" || last.UploaderID != "user-uploader-123" {
+		t.Errorf("unexpected event: %+v", last)
 	}
 }
 

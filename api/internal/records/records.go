@@ -44,9 +44,27 @@ type ResolvedFields struct {
 	IssueDate      *string `json:"issue_date"`
 }
 
+// PublicVerification defines the public fields visible on the verification lookup page.
+// Note: private marks_json and register_number are strictly excluded per design specification.
+type PublicVerification struct {
+	Verified             bool      `json:"verified"`
+	PublicVerificationID string    `json:"public_verification_id"`
+	Name                 *string   `json:"name"`
+	RollNumber           *string   `json:"roll_number"`
+	Degree               *string   `json:"degree"`
+	CGPA                 *string   `json:"cgpa"`
+	IssueDate            *string   `json:"issue_date"`
+	SourceHash           string    `json:"source_hash"`
+	FieldsHash           string    `json:"fields_hash"`
+	VerifiedByIssuer     bool      `json:"verified_by_issuer"`
+	IssuedAt             time.Time `json:"issued_at"`
+	StampedDocumentURL   string    `json:"stamped_document_url,omitempty"`
+}
+
 // Repository defines data access methods for records.
 type Repository interface {
 	GetByJobID(ctx context.Context, jobID string) (*Record, error)
+	GetByPublicVerificationID(ctx context.Context, publicVerificationID string) (*Record, error)
 	Resolve(ctx context.Context, jobID string, resolved ResolvedFields, fieldsHash string, diff map[string]any, reviewerID string) error
 	Reject(ctx context.Context, jobID string, reason string, reviewerID string) error
 }
