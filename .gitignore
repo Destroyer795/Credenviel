@@ -12,8 +12,11 @@ venv/
 
 # Build output
 frontend/dist/
+dist/
+functions/dist/
 api/bin/
 infra/*.json
+infra/**/*.json
 *.egg-info/
 
 # IDE
@@ -40,3 +43,4 @@ azdata/
 # Temporary
 _pdf_text.txt
 *.log
+scale_test_results.csv

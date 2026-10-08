@@ -6,7 +6,6 @@ using '../main.bicep'
 param location = 'eastasia'
 param environment = 'dev'
 param apiImageTag = 'latest'
-param workerImageTag = 'latest'
 
 // Browser origins allowed to upload to Blob Storage. Add the deployed frontend origin later.
 param corsAllowedOrigins = [
@@ -19,15 +18,31 @@ param corsAllowedOrigins = [
 param developerPrincipalId = readEnvironmentVariable('DEV_PRINCIPAL_ID', '')
 
 // Postgres admin password. Generate a strong password, export it before deploying:
-//   read -rs PG_ADMIN_PASSWORD && export PG_ADMIN_PASSWORD
+//   $sec = Read-Host -Prompt "Enter Postgres Admin Password" -AsSecureString
+//   $env:PG_ADMIN_PASSWORD = [System.Net.NetworkCredential]::new('', $sec).Password
 // The deployment stores it in Key Vault. Empty means Postgres is skipped
-// (allows 2a redeployments without the password).
+// (allows redeployments without the password).
 param pgAdminPassword = readEnvironmentVariable('PG_ADMIN_PASSWORD', '')
 
 // Developer public IP for the Postgres firewall rule:
-//   export DEV_IP=$(curl -s https://ifconfig.me)
+//   $env:DEV_IP = (Invoke-RestMethod https://api.ipify.org).Trim()
 // Empty skips the rule.
 param developerIp = readEnvironmentVariable('DEV_IP', '')
 
 // Test resources (test-scratch container, job-processing-test queue) — enabled for dev.
 param enableTestResources = true
+
+// Worker container image tag (pass 2 & 3):
+//   export WORKER_IMAGE_TAG=<git short hash>
+param workerImageTag = readEnvironmentVariable('WORKER_IMAGE_TAG', '')
+
+// Deploy compute apps (Worker Container App and Function App). Default false for pass 1:
+//   export DEPLOY_APPS=true
+param deployApps = bool(readEnvironmentVariable('DEPLOY_APPS', 'false'))
+
+// Enable Event Grid subscription to Function App. Set true ONLY in pass 3 after Function is published:
+//   export ENABLE_EVENT_SUBSCRIPTION=true
+param enableEventSubscription = bool(readEnvironmentVariable('ENABLE_EVENT_SUBSCRIPTION', 'false'))
+
+// Function hosting plan: Consumption (default) or FlexConsumption (fallback if quota requires)
+param functionHostingPlan = readEnvironmentVariable('FUNCTION_HOSTING_PLAN', 'Consumption')

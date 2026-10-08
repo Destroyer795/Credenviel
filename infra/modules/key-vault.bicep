@@ -31,6 +31,7 @@ resource vault 'Microsoft.KeyVault/vaults@2023-07-01' = {
       name: 'standard'
     }
     enableRbacAuthorization: true
+    enabledForTemplateDeployment: true
     enableSoftDelete: true
     softDeleteRetentionInDays: softDeleteRetentionInDays
     // enablePurgeProtection intentionally omitted (off); once enabled it can never be disabled.
