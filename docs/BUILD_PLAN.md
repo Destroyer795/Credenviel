@@ -51,7 +51,7 @@
 
 ---
 
-## Phase 2 — Cloud Core Infrastructure
+## Phase 2 — Cloud Core Infrastructure (DONE)
 
 **What:** Run the real event-driven pipeline on Azure, all infrastructure as Bicep, in three gated sub-phases. Full procedure, owner commands and agent prompts: [PHASE2_HANDOVER.md](PHASE2_HANDOVER.md) (where it differs from the runbook, the handover wins).
 
@@ -65,24 +65,24 @@
 
 ### 2a — Bootstrap
 Monitoring workspace, ACR, Key Vault, Storage (with CORS), Service Bus, user-assigned managed identity with role assignments.
-- [ ] `az bicep build` and `lint` clean; `what-if` reviewed; all expected resources exist with tags `project=credenviel`, `env=dev`; nothing unexpected. Tag `phase-2a`.
+- [x] `az bicep build` and `lint` clean; `what-if` reviewed; all expected resources exist with tags `project=credenviel`, `env=dev`; nothing unexpected. Tag `phase-2a`.
 
 ### 2b — Data and real adapters
 Postgres Flexible Server, test resources, Azure adapters (Service Bus queue, Blob store, Go user-delegation SAS), Azure migrate/test/run targets.
-- [ ] A real SAS upload (with `x-ms-blob-type: BlockBlob`) lands in Blob.
-- [ ] A real message round-trips on Service Bus.
-- [ ] Migrations 001 and 002 applied to Azure Postgres.
-- [ ] `make test` and `make test-integration` still green; Postgres stopped at end of session. Tag `phase-2b`.
+- [x] A real SAS upload (with `x-ms-blob-type: BlockBlob`) lands in Blob.
+- [x] A real message round-trips on Service Bus.
+- [x] Migrations 001 and 002 applied to Azure Postgres.
+- [x] `make test` and `make test-integration` still green; Postgres stopped at end of session. Tag `phase-2b`.
 
 ### 2c — Compute and end-to-end
 Container Apps environment, worker app with KEDA rule, Function app, Event Grid subscription (behind a flag), Dockerfile, packaging, e2e and scale-test scripts.
-- [ ] `az bicep build`, lint, `what-if` clean; resources in the dedicated group with tags.
-- [ ] Real upload triggers the Function via Event Grid; job becomes `queued`; message lands on Service Bus.
-- [ ] Worker scales 0 to at least 1, job `processed` with the stub extractor, record row in Azure Postgres.
-- [ ] Replicas return to 0 after the 5-minute cooldown.
-- [ ] Worker shuts down cleanly on SIGTERM (scale-in does not lose or corrupt a job).
-- [ ] `make test`, `make test-integration` and CI green; secret scan clean; Postgres stopped.
-- [ ] Evidence captured; merged with a merge commit; tag `phase-2`.
+- [x] `az bicep build`, lint, `what-if` clean; resources in the dedicated group with tags.
+- [x] Real upload triggers the Function via Event Grid; job becomes `queued`; message lands on Service Bus.
+- [x] Worker scales 0 to at least 1, job `processed` with the stub extractor, record row in Azure Postgres.
+- [x] Replicas return to 0 after the 5-minute cooldown.
+- [x] Worker shuts down cleanly on SIGTERM (scale-in does not lose or corrupt a job).
+- [x] `make test`, `make test-integration` and CI green; secret scan clean; Postgres stopped.
+- [x] Evidence captured; merged with a merge commit; tag `phase-2`.
 
 ---
 
