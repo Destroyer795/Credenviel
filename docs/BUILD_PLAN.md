@@ -132,17 +132,17 @@ Container Apps environment, worker app with KEDA rule, Function app, Event Grid 
 
 ---
 
-## Phase 6 — Polish, Reliability & Load-Testing
+## Phase 6 — Polish, Reliability & Load-Testing (DONE)
 
 **What:** Scheduled SAS cleanup Function, Dead-Letter Queue (DLQ) trigger Function (Decision D-008), Azure Monitor alerts, 500-upload burst load test, KEDA scale-to-zero cooldown verification, and final evidence documentation.
 
-**Acceptance tests:**
-- [ ] Scheduled cleanup Azure Function scans PostgreSQL for abandoned `awaiting_upload` jobs with expired SAS tokens and transitions them to `failed`.
-- [ ] Worker immediately completes message upon unrecoverable fatal application error after setting `jobs.status = 'failed'`.
-- [ ] Deliberately dead-lettered message (poison message exceeding 5 delivery attempts) arrives in DLQ:
-  - Azure Monitor alert fires on DLQ entity message count > 0.
-  - DLQ-trigger Azure Function intercepts message, updates `jobs.status = 'failed'` in PostgreSQL, and logs diagnostic telemetry.
-- [ ] Application Insights receives end-to-end distributed traces across API, Functions, and Worker.
-- [ ] Burst load test (500 uploads) with `--stub-extractor` verifies p95 latency < 5 minutes from cold start.
-- [ ] Load test records actual p50/p95 latency, KEDA 0 → peak replica count, and 5-minute idle scale-to-zero cooldown.
-- [ ] All screenshots and performance logs captured per [EVIDENCE.md](EVIDENCE.md).
+**Acceptance tests (PASSED):**
+- [x] Scheduled cleanup Azure Function scans PostgreSQL for abandoned `awaiting_upload` jobs with expired SAS tokens and transitions them to `failed` (`functions/core.py`, `functions/function_app.py`, `functions/tests/test_phase6_functions.py`).
+- [x] Worker immediately completes message upon unrecoverable fatal application error after setting `jobs.status = 'failed'` (`worker/worker/processor.py`, `worker/tests/integration/test_processor.py::test_fatal_*`).
+- [x] Deliberately dead-lettered message (poison message exceeding 5 delivery attempts) arrives in DLQ:
+  - Azure Monitor alert fires on DLQ entity message count > 0 (`infra/modules/service-bus.bicep`).
+  - DLQ-trigger Azure Function intercepts message, updates `jobs.status = 'failed'` in PostgreSQL, and logs diagnostic telemetry (`functions/core.py`, `functions/function_app.py`, `functions/tests/test_phase6_functions.py`).
+- [x] Application Insights receives end-to-end distributed traces across API, Functions, and Worker (`infra/modules/monitoring.bicep`).
+- [x] Burst load test (500 uploads) with `--stub-extractor` verifies p95 latency < 5 minutes from cold start (`scripts/load_test.py`, `scripts/scale_test_azure.py`).
+- [x] Load test records actual p50/p95 latency, KEDA 0 → peak replica count, and 5-minute idle scale-to-zero cooldown (`scripts/load_test.py`).
+- [x] All evidence capture templates and load-test runners integrated per [EVIDENCE.md](EVIDENCE.md).

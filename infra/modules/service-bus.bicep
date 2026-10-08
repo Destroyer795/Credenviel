@@ -62,6 +62,45 @@ resource testQueue 'Microsoft.ServiceBus/namespaces/queues@2021-11-01' = if (ena
   }
 }
 
+// Phase 6: Azure Monitor metric alert on Dead-Letter Queue entity message count > 0
+resource dlqMetricAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = {
+  name: 'alert-sb-dlq-${uniqueString(resourceGroup().id)}'
+  location: 'global'
+  tags: tags
+  properties: {
+    description: 'Phase 6: Fires when dead-lettered message count exceeds 0 in job-processing queue'
+    severity: 1
+    enabled: true
+    scopes: [
+      namespace.id
+    ]
+    evaluationFrequency: 'PT1M'
+    windowSize: 'PT5M'
+    criteria: {
+      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+      allOf: [
+        {
+          name: 'DeadLetteredCriteria'
+          metricName: 'DeadletteredMessages'
+          dimensions: [
+            {
+              name: 'EntityName'
+              operator: 'Include'
+              values: [
+                jobQueue.name
+              ]
+            }
+          ]
+          operator: 'GreaterThan'
+          threshold: 0
+          timeAggregation: 'Total'
+          criterionType: 'StaticThresholdCriterion'
+        }
+      ]
+    }
+  }
+}
+
 output namespaceName string = namespace.name
 output namespaceId string = namespace.id
 output queueName string = jobQueue.name

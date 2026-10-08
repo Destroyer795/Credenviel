@@ -174,3 +174,102 @@ def _fail_job(conn: psycopg.Connection, job_id: uuid.UUID, reason: str) -> Handl
         conn.commit()
 
     return HandleResult(action="failed", job_id=str(job_id), reason=reason)
+
+
+def handle_scheduled_cleanup(conn: psycopg.Connection, max_age_minutes: int = 15) -> list[str]:
+    """Scan PostgreSQL for abandoned awaiting_upload jobs with expired SAS tokens and transition to failed.
+
+    Returns the list of job IDs (as strings) that were transitioned to failed.
+    """
+    logger.info("Running scheduled cleanup for jobs older than %d minutes", max_age_minutes)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE jobs
+            SET status = 'failed',
+                failure_reason = 'upload_expired_sas'
+            WHERE status = 'awaiting_upload'
+              AND created_at < NOW() - (%s || ' minutes')::interval
+            RETURNING id
+            """,
+            (str(max_age_minutes),),
+        )
+        rows = cur.fetchall()
+        cleaned_ids = [str(r[0]) for r in rows]
+
+    if not conn.autocommit:
+        conn.commit()
+
+    if cleaned_ids:
+        logger.warning(
+            "Scheduled cleanup expired %d abandoned jobs: %s",
+            len(cleaned_ids),
+            cleaned_ids[:10],
+        )
+    else:
+        logger.info("Scheduled cleanup found 0 abandoned jobs to expire")
+
+    return cleaned_ids
+
+
+def handle_dead_letter(
+    conn: psycopg.Connection,
+    message_body: dict | str,
+    diagnostic_reason: str = "dead_letter_exceeded_retries",
+) -> HandleResult:
+    """Handle a poison message intercepted from the dead-letter queue ($deadletterqueue).
+
+    Updates PostgreSQL to mark the job failed with diagnostic telemetry.
+    """
+    import json
+
+    if isinstance(message_body, str):
+        try:
+            data = json.loads(message_body)
+        except Exception:
+            data = {}
+    elif isinstance(message_body, dict):
+        data = message_body
+    else:
+        data = {}
+
+    job_id_str = str(data.get("job_id", "")).strip()
+    if not job_id_str:
+        logger.error("Dead-letter message has missing or empty job_id: %s", message_body)
+        return HandleResult(action="no_op", reason="missing_job_id")
+
+    try:
+        job_id = uuid.UUID(job_id_str)
+    except ValueError:
+        logger.error("Dead-letter message has invalid job UUID: %s", job_id_str)
+        return HandleResult(action="no_op", reason="invalid_uuid")
+
+    logger.warning(
+        "Intercepted dead-letter message for job %s: reason=%s",
+        job_id,
+        diagnostic_reason,
+    )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE jobs
+            SET status = 'failed',
+                failure_reason = %s
+            WHERE id = %s AND status != 'failed'
+            RETURNING id, status
+            """,
+            (diagnostic_reason, job_id),
+        )
+        row = cur.fetchone()
+
+    if not conn.autocommit:
+        conn.commit()
+
+    if row is None:
+        logger.info("Job %s was already finalized or not found; no update needed", job_id)
+        return HandleResult(action="no_op", job_id=job_id_str, reason="already_finalized_or_not_found")
+
+    logger.warning("Job %s transitioned to failed via DLQ trigger", job_id)
+    return HandleResult(action="failed", job_id=job_id_str, reason=diagnostic_reason)
+

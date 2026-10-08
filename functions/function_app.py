@@ -15,9 +15,21 @@ from typing import Any
 import psycopg
 
 try:
-    from functions.core import FunctionDeps, HandleResult, handle_blob_created
+    from functions.core import (
+        FunctionDeps,
+        HandleResult,
+        handle_blob_created,
+        handle_scheduled_cleanup,
+        handle_dead_letter,
+    )
 except ImportError:
-    from core import FunctionDeps, HandleResult, handle_blob_created
+    from core import (
+        FunctionDeps,
+        HandleResult,
+        handle_blob_created,
+        handle_scheduled_cleanup,
+        handle_dead_letter,
+    )
 
 # Cached store and queue clients across invocations
 _cached_store: Any = None
@@ -165,6 +177,26 @@ def process_blob_event(
         return result
 
 
+def process_cleanup_event(max_age_minutes: int = 15, conn: psycopg.Connection | None = None) -> list[str]:
+    """Testable helper to run scheduled cleanup of expired awaiting_upload jobs."""
+    if conn is not None:
+        return handle_scheduled_cleanup(conn, max_age_minutes=max_age_minutes)
+    with get_db_connection() as db_conn:
+        return handle_scheduled_cleanup(db_conn, max_age_minutes=max_age_minutes)
+
+
+def process_dead_letter_event(
+    message_body: dict | str,
+    diagnostic_reason: str = "dead_letter_exceeded_retries",
+    conn: psycopg.Connection | None = None,
+) -> HandleResult:
+    """Testable helper to process a dead-lettered message."""
+    if conn is not None:
+        return handle_dead_letter(conn, message_body, diagnostic_reason=diagnostic_reason)
+    with get_db_connection() as db_conn:
+        return handle_dead_letter(db_conn, message_body, diagnostic_reason=diagnostic_reason)
+
+
 # Azure Functions v4 programming model entrypoint
 try:
     import azure.functions as func
@@ -196,6 +228,45 @@ try:
 
         process_blob_event(data, subject=getattr(event, "subject", "") or "")
 
+    @app.function_name(name="ScheduledCleanupTrigger")
+    @app.timer_trigger(
+        arg_name="timer",
+        schedule=os.getenv("CLEANUP_CRON_SCHEDULE", "0 */15 * * * *"),
+        run_on_startup=False,
+    )
+    def scheduled_cleanup(timer: func.TimerRequest) -> None:
+        """Scan PostgreSQL for abandoned awaiting_upload jobs and transition them to failed."""
+        logger.info("ScheduledCleanupTrigger fired")
+        try:
+            max_age = int(os.getenv("SAS_EXPIRY_MINUTES", "15"))
+            cleaned = process_cleanup_event(max_age_minutes=max_age)
+            logger.info("ScheduledCleanupTrigger completed: expired %d jobs", len(cleaned))
+        except Exception as e:
+            logger.exception("ScheduledCleanupTrigger error: %s", e)
+
+    @app.function_name(name="DeadLetterTrigger")
+    @app.service_bus_queue_trigger(
+        arg_name="msg",
+        queue_name=os.getenv("SERVICEBUS_QUEUE", "job-processing") + "/$deadletterqueue",
+        connection="SERVICEBUS_CONNECTION",
+    )
+    def dead_letter_handler(msg: func.ServiceBusMessage) -> None:
+        """Handle poison messages from Service Bus dead-letter queue."""
+        delivery_count = getattr(msg, "delivery_count", 5)
+        logger.warning(
+            "DeadLetterTrigger intercepted message: id=%s delivery_count=%s",
+            msg.message_id,
+            delivery_count,
+        )
+        try:
+            raw_body = msg.get_body().decode("utf-8") if msg.get_body() else "{}"
+            reason = f"poison_message_delivery_count_{delivery_count}"
+            res = process_dead_letter_event(raw_body, diagnostic_reason=reason)
+            logger.info("DeadLetterTrigger outcome: action=%s job_id=%s reason=%s", res.action, res.job_id, res.reason)
+        except Exception as e:
+            logger.exception("DeadLetterTrigger failed processing poison message: %s", e)
+
 except ImportError:
     # Running outside azure-functions runtime (e.g. local unit tests)
     app = None
+
