@@ -8,6 +8,7 @@ Safety features:
 - Never prints passwords or credentials.
 """
 
+import os
 from pathlib import Path
 import shutil
 import subprocess
