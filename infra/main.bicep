@@ -7,10 +7,13 @@
 // Phase 2b adds: Postgres Flexible Server, test resources (test-scratch container,
 // job-processing-test queue), and stores the Postgres password in Key Vault.
 //
-// Usage (resource-group scope; see infra/README.md for the full owner sequence):
+// Phase 2c adds: Container Apps managed environment, worker Container App with
+// KEDA Service Bus scaling, Function App for blob processing, and Event Grid topic/subscription.
+//
+// Usage (resource-group scope; see docs/DEPLOY.md for the full owner sequence):
 //   az bicep build --file infra/main.bicep
 //   az deployment group what-if -g rg-credenviel-dev -p infra/parameters/dev.bicepparam
-//   az deployment group create  -g rg-credenviel-dev -p infra/parameters/dev.bicepparam -n p2b-1
+//   az deployment group create  -g rg-credenviel-dev -p infra/parameters/dev.bicepparam -n p2c-1
 
 targetScope = 'resourceGroup'
 
@@ -24,9 +27,17 @@ param environment string = 'dev'
 #disable-next-line no-unused-params
 param apiImageTag string = 'latest'
 
-@description('Container image tag for Worker (used from 2c)')
-#disable-next-line no-unused-params
-param workerImageTag string = 'latest'
+@description('Container image tag for Worker (read from WORKER_IMAGE_TAG env). Empty when apps not yet deployed.')
+param workerImageTag string = ''
+
+@description('Deploy compute applications (Worker and Function). False on initial infra pass.')
+param deployApps bool = false
+
+@description('Enable Event Grid subscription to Function App. Set to true only after Function code is published.')
+param enableEventSubscription bool = false
+
+@description('Hosting plan for Function App: Consumption or FlexConsumption (fallback)')
+param functionHostingPlan string = 'Consumption'
 
 @description('Browser origins allowed to upload to and read from Blob Storage (CORS)')
 param corsAllowedOrigins array = [
@@ -108,7 +119,6 @@ module identity 'modules/identity.bicep' = {
 }
 
 // Postgres: deployed when a password is provided; skipped otherwise.
-// This lets 2a redeploys work without the PG_ADMIN_PASSWORD set.
 module postgres 'modules/postgres.bicep' = if (!empty(pgAdminPassword)) {
   name: 'postgres'
   params: {
@@ -120,10 +130,85 @@ module postgres 'modules/postgres.bicep' = if (!empty(pgAdminPassword)) {
   }
 }
 
-// Stubs, implemented in later sub-phases:
-//   container-apps-env  (2c)
-//   worker-app          (2c)
-//   function-app        (2c)
+// Container Apps Environment — consumption environment shared by worker and API
+module containerAppsEnv 'modules/container-apps-env.bicep' = {
+  name: 'container-apps-env'
+  params: {
+    location: location
+    tags: tags
+    environment: environment
+    logAnalyticsWorkspaceName: monitoring.outputs.workspaceName
+  }
+}
+
+// Default Postgres FQDN helper when postgres module is conditional in Bicep
+var defaultPostgresFqdn = 'psql-cred-${uniqueString(resourceGroup().id)}.postgres.database.azure.com'
+
+// Reference existing Key Vault to securely retrieve secret values for modules requiring literal values
+resource existingKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: 'kv-cred-${uniqueString(resourceGroup().id)}'
+}
+
+// Reference existing ACR for credentials
+resource existingAcr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
+  name: 'crcredenviel${uniqueString(resourceGroup().id)}'
+}
+
+// Python Worker Container App (deployed in pass 2 after image push)
+module workerApp 'modules/worker-app.bicep' = if (deployApps && !empty(workerImageTag)) {
+  name: 'worker-app'
+  params: {
+    location: location
+    tags: tags
+    environment: environment
+    imageTag: workerImageTag
+    containerAppsEnvironmentId: containerAppsEnv.outputs.environmentId
+    identityId: identity.outputs.identityId
+    identityClientId: identity.outputs.identityClientId
+    registryLoginServer: acr.outputs.loginServer
+    registryUsername: existingAcr.listCredentials().username
+    registryPassword: existingAcr.listCredentials().passwords[0].value
+    storageAccountName: storage.outputs.storageAccountName
+    serviceBusNamespaceName: serviceBus.outputs.namespaceName
+    serviceBusFqdn: serviceBus.outputs.fullyQualifiedNamespace
+    serviceBusQueueName: serviceBus.outputs.queueName
+    postgresPassword: existingKeyVault.getSecret('postgres-admin-password')
+    postgresFqdn: postgres.?outputs.serverFqdn ?? defaultPostgresFqdn
+  }
+}
+
+// Function App for Event Grid blob trigger (deployed in pass 2)
+module functionApp 'modules/function-app.bicep' = if (deployApps) {
+  name: 'function-app'
+  params: {
+    location: location
+    tags: tags
+    environment: environment
+    hostingPlan: functionHostingPlan
+    identityId: identity.outputs.identityId
+    identityClientId: identity.outputs.identityClientId
+    appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    keyVaultUri: keyVault.outputs.vaultUri
+    uploadsStorageAccountName: storage.outputs.storageAccountName
+    serviceBusFqdn: serviceBus.outputs.fullyQualifiedNamespace
+    serviceBusQueueName: serviceBus.outputs.queueName
+    postgresFqdn: postgres.?outputs.serverFqdn ?? defaultPostgresFqdn
+  }
+}
+
+// Event Grid System Topic on Storage Account and Subscription to Function (deployed in pass 3)
+module eventGrid 'modules/event-grid.bicep' = if (deployApps) {
+  name: 'event-grid'
+  params: {
+    location: location
+    tags: tags
+    storageAccountId: storage.outputs.storageAccountId
+    functionAppId: deployApps ? (functionApp.?outputs.functionAppId ?? '') : ''
+    enableEventSubscription: enableEventSubscription
+  }
+}
+
+// Stubs for future phases:
 //   api-app             (Phase 3)
 //   signalr             (Phase 5)
 
@@ -153,3 +238,10 @@ output postgresServerFqdn string = postgres.?outputs.serverFqdn ?? ''
 output postgresDatabaseName string = postgres.?outputs.databaseName ?? ''
 #disable-next-line outputs-should-not-contain-secrets
 output postgresSecretName string = postgres.?outputs.secretName ?? ''
+// Compute outputs (2c)
+output containerAppsEnvironmentId string = containerAppsEnv.outputs.environmentId
+output containerAppsEnvironmentName string = containerAppsEnv.outputs.environmentName
+output workerAppName string = workerApp.?outputs.workerAppName ?? ''
+output functionAppName string = functionApp.?outputs.functionAppName ?? ''
+output functionAppId string = functionApp.?outputs.functionAppId ?? ''
+output eventGridTopicName string = eventGrid.?outputs.systemTopicName ?? ''

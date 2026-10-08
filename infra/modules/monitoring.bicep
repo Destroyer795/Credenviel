@@ -48,3 +48,4 @@ output workspaceName string = workspace.name
 output workspaceId string = workspace.id
 output appInsightsName string = appInsights.name
 output appInsightsId string = appInsights.id
+output appInsightsConnectionString string = appInsights.properties.ConnectionString

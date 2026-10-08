@@ -98,3 +98,33 @@ func TestAuth_Success(t *testing.T) {
 		t.Errorf("unexpected user in context: %+v", capturedUser)
 	}
 }
+
+func TestAuth_DefaultName(t *testing.T) {
+	store := &fakeUserStore{users: make(map[string]User)}
+	middleware := Middleware(DevHeaderSource{}, store)
+
+	var capturedUser User
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, ok := FromContext(r.Context())
+		if !ok {
+			t.Fatalf("expected user in context")
+		}
+		capturedUser = u
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs", nil)
+	req.Header.Set("X-Dev-User", "entra-student-2")
+	req.Header.Set("X-Dev-Role", "student")
+	// X-Dev-Name omitted
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+
+	if capturedUser.Name != "entra-student-2" {
+		t.Errorf("expected name to default to entraID, got %s", capturedUser.Name)
+	}
+}

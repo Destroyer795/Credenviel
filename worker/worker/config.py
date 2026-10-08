@@ -30,7 +30,7 @@ def load_config() -> dict:
         "servicebus_queue": os.getenv("SERVICEBUS_QUEUE", os.getenv("QUEUE_NAME", "job-processing")),
         "storage_account_name": os.getenv("STORAGE_ACCOUNT_NAME", ""),
         "azure_client_id": os.getenv("AZURE_CLIENT_ID", ""),
-        "api_internal_url": os.getenv("API_INTERNAL_URL", "http://localhost:8080"),
+        "api_internal_url": os.getenv("API_INTERNAL_URL", "http://localhost:8080" if os.getenv("APP_ENV", "local") == "local" else ""),
         "internal_api_key": os.getenv("INTERNAL_API_KEY", ""),
         "local_storage_root": os.getenv("LOCAL_STORAGE_ROOT", ".local-storage"),
     }
