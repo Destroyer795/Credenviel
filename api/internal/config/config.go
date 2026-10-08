@@ -21,6 +21,9 @@ type Config struct {
 	PublicBaseURL       string
 	LocalStorageRoot    string
 	ConfidenceThreshold string
+	StoreBackend        string
+	StorageAccountName  string
+	AzureClientID       string
 }
 
 // Load reads configuration using the provided environment lookup function.
@@ -47,6 +50,9 @@ func LoadWith(getenv func(string) string) *Config {
 		PublicBaseURL:       getVal(getenv, "PUBLIC_BASE_URL", "http://127.0.0.1:8080"),
 		LocalStorageRoot:    getVal(getenv, "LOCAL_STORAGE_ROOT", ".local-storage"),
 		ConfidenceThreshold: getVal(getenv, "CONFIDENCE_THRESHOLD", "0.85"),
+		StoreBackend:        getVal(getenv, "STORE_BACKEND", "local"),
+		StorageAccountName:  getVal(getenv, "STORAGE_ACCOUNT_NAME", ""),
+		AzureClientID:       getVal(getenv, "AZURE_CLIENT_ID", ""),
 	}
 }
 

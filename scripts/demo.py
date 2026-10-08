@@ -136,11 +136,14 @@ def main():
         print(f"    - Dev Upload URL: {upload_url}")
 
         # 5. Upload PDF via dev upload endpoint
-        print("\n[3/6] Uploading PDF via PUT dev upload endpoint...")
+        upload_headers = {"Content-Type": "application/pdf"}
+        if "headers" in job_resp.get("upload", {}):
+            upload_headers.update(job_resp["upload"]["headers"])
+
         upload_req = urllib.request.Request(
             upload_url,
             data=DEMO_PDF_BYTES,
-            headers={"Content-Type": "application/pdf"},
+            headers=upload_headers,
             method="PUT",
         )
         with urllib.request.urlopen(upload_req, timeout=5) as resp:

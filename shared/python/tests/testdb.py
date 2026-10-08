@@ -47,7 +47,14 @@ def get_test_connection(autocommit: bool = True) -> psycopg.Connection:
 
 
 def assert_is_test_db(conn: psycopg.Connection):
-    """Refuse execution unless connected to credenviel_test."""
+    """Refuse execution unless connected to credenviel_test on localhost."""
+    cfg = get_pg_config()
+    host = (cfg.get("host") or "").lower()
+    if host not in ("localhost", "127.0.0.1", "::1"):
+        raise RuntimeError(
+            f"SAFETY VIOLATION: Refusing to run tests against non-local database host '{host}'. "
+            f"Only 'localhost' or '127.0.0.1' is permitted."
+        )
     res = conn.execute("SELECT current_database()").fetchone()
     if not res or res[0] != TEST_DB_NAME:
         raise RuntimeError(

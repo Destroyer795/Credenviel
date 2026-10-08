@@ -26,6 +26,9 @@ param lockDuration string = 'PT1M'
 @description('Deliveries before a message is dead-lettered')
 param maxDeliveryCount int = 5
 
+@description('Deploy test resources (job-processing-test queue). True for dev.')
+param enableTestResources bool = false
+
 resource namespace 'Microsoft.ServiceBus/namespaces@2021-11-01' = {
   name: namespaceName
   location: location
@@ -39,6 +42,18 @@ resource namespace 'Microsoft.ServiceBus/namespaces@2021-11-01' = {
 resource jobQueue 'Microsoft.ServiceBus/namespaces/queues@2021-11-01' = {
   parent: namespace
   name: queueName
+  properties: {
+    lockDuration: lockDuration
+    maxDeliveryCount: maxDeliveryCount
+    deadLetteringOnMessageExpiration: true
+    requiresSession: false
+  }
+}
+
+// Test queue — used only by adapter tests (test-azure); behind enableTestResources.
+resource testQueue 'Microsoft.ServiceBus/namespaces/queues@2021-11-01' = if (enableTestResources) {
+  parent: namespace
+  name: 'job-processing-test'
   properties: {
     lockDuration: lockDuration
     maxDeliveryCount: maxDeliveryCount

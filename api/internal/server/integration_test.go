@@ -58,7 +58,8 @@ func getTestDSN() string {
 }
 
 func ensureTestDB(t *testing.T) {
-	if err := ValidateTestDBName(testDBName); err != nil {
+	host, _, _, _ := getPGConfig()
+	if err := ValidateTestDBTarget(testDBName, host); err != nil {
 		t.Fatalf("%v", err)
 	}
 	initDBOnce.Do(func() {

@@ -5,6 +5,9 @@ from credenviel_shared.local_queue import LocalQueue
 from credenviel_shared.store import Store, LocalFileStore
 from credenviel_shared.filetype import detect_magic, validate_magic
 
+from credenviel_shared.service_bus_queue import ServiceBusQueue
+from credenviel_shared.blob_store import BlobStore
+
 from credenviel_shared.normalizer import (
     compute_fields_hash,
     to_canonical_json,
@@ -20,8 +23,10 @@ __all__ = [
     "LockLostError",
     "MessageNotFoundError",
     "LocalQueue",
+    "ServiceBusQueue",
     "Store",
     "LocalFileStore",
+    "BlobStore",
     "detect_magic",
     "validate_magic",
     "compute_fields_hash",
