@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 )
@@ -42,12 +44,31 @@ func LoadWith(getenv func(string) string) *Config {
 	clientID := getVal(getenv, "ENTRA_CLIENT_ID", "")
 	audience := getVal(getenv, "ENTRA_AUDIENCE", clientID)
 
+	dbURL := getVal(getenv, "DATABASE_URL", "")
+	if dbURL == "" {
+		pghost := getenv("PGHOST")
+		if pghost != "" {
+			pgport := getVal(getenv, "PGPORT", "5432")
+			pguser := getVal(getenv, "PGUSER", "credenvieladmin")
+			pgpass := getenv("PGPASSWORD")
+			pgdb := getVal(getenv, "PGDATABASE", "credenviel")
+			pgssl := getVal(getenv, "PGSSLMODE", "require")
+			if pgpass != "" {
+				dbURL = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", pguser, url.QueryEscape(pgpass), pghost, pgport, pgdb, pgssl)
+			} else {
+				dbURL = fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", pguser, pghost, pgport, pgdb, pgssl)
+			}
+		} else {
+			dbURL = "postgres://credenviel:localdev@127.0.0.1:5433/credenviel?sslmode=disable"
+		}
+	}
+
 	return &Config{
 		Host:                getVal(getenv, "HOST", "127.0.0.1"),
 		Port:                getVal(getenv, "PORT", "8080"),
 		AppEnv:              getVal(getenv, "APP_ENV", "local"),
 		AuthMode:            getVal(getenv, "AUTH_MODE", "dev"),
-		DatabaseURL:         getVal(getenv, "DATABASE_URL", "postgres://credenviel:localdev@127.0.0.1:5433/credenviel?sslmode=disable"),
+		DatabaseURL:         dbURL,
 		BlobURL:             getVal(getenv, "BLOB_URL", "http://127.0.0.1:10000/devstoreaccount1"),
 		QueueURL:            getVal(getenv, "QUEUE_URL", ""),
 		SignalRURL:          getVal(getenv, "SIGNALR_URL", ""),
