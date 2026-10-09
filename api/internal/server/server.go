@@ -693,6 +693,13 @@ func (s *Server) handlePublicVerify(w http.ResponseWriter, r *http.Request) {
 		stampedURL, _ = s.readSigner.SignRead(stampedKey, 15*time.Minute)
 	}
 
+	documentURL := stampedURL
+	if documentURL == "" && s.readSigner != nil && rec.JobID != "" {
+		if job, jobErr := s.jobRepo.Get(r.Context(), rec.JobID); jobErr == nil && job != nil && job.BlobKey != "" {
+			documentURL, _ = s.readSigner.SignRead(job.BlobKey, 15*time.Minute)
+		}
+	}
+
 	resp := records.PublicVerification{
 		Verified:             true,
 		PublicVerificationID: rec.PublicVerificationID,
@@ -707,6 +714,8 @@ func (s *Server) handlePublicVerify(w http.ResponseWriter, r *http.Request) {
 		FieldsHash:           rec.FieldsHash,
 		VerifiedByIssuer:     rec.VerifiedByIssuer,
 		IssuedAt:             rec.CreatedAt,
+		IssuingAuthority:     s.cfg.IssuingAuthority,
+		DocumentURL:          documentURL,
 		StampedDocumentURL:   stampedURL,
 	}
 

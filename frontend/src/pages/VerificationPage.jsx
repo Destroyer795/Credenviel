@@ -257,7 +257,7 @@ export function VerificationPage() {
                   <div>
                     <div className="meta-field-label">Issuing Authority</div>
                     <div className="meta-field-value" id="verify-institution">
-                      {certData.institution || 'National Institute of Technology'}
+                      {certData.issuing_authority || certData.institution || 'Amrita Vishwa Vidyapeetham'}
                     </div>
                   </div>
 
@@ -350,17 +350,17 @@ export function VerificationPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              {certData.stamped_document_url && (
+              {(certData.document_url || certData.stamped_document_url) && (
                 <a
-                  href={certData.stamped_document_url}
+                  href={certData.document_url || certData.stamped_document_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-success"
-                  id="btn-download-stamped-pdf"
+                  id="btn-view-document"
                   style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
                 >
-                  <IconDownload size={15} />
-                  <span>Download QR-Stamped PDF</span>
+                  <IconExternalLink size={15} />
+                  <span>View document</span>
                 </a>
               )}
               <button

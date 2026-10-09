@@ -64,6 +64,8 @@ type PublicVerification struct {
 	FieldsHash           string    `json:"fields_hash"`
 	VerifiedByIssuer     bool      `json:"verified_by_issuer"`
 	IssuedAt             time.Time `json:"issued_at"`
+	IssuingAuthority     string    `json:"issuing_authority"`
+	DocumentURL          string    `json:"document_url,omitempty"`
 	StampedDocumentURL   string    `json:"stamped_document_url,omitempty"`
 }
 

@@ -21,6 +21,7 @@ type Config struct {
 	InternalAPIKey      string
 	MaxUploadBytes      int64
 	PublicBaseURL       string
+	IssuingAuthority    string
 	LocalStorageRoot    string
 	ConfidenceThreshold string
 	StoreBackend        string
@@ -76,6 +77,7 @@ func LoadWith(getenv func(string) string) *Config {
 		InternalAPIKey:      getVal(getenv, "INTERNAL_API_KEY", ""),
 		MaxUploadBytes:      maxUpload,
 		PublicBaseURL:       getVal(getenv, "PUBLIC_BASE_URL", "http://127.0.0.1:8080"),
+		IssuingAuthority:    getVal(getenv, "ISSUING_AUTHORITY", "Amrita Vishwa Vidyapeetham"),
 		LocalStorageRoot:    getVal(getenv, "LOCAL_STORAGE_ROOT", ".local-storage"),
 		ConfidenceThreshold: getVal(getenv, "CONFIDENCE_THRESHOLD", "0.85"),
 		StoreBackend:        getVal(getenv, "STORE_BACKEND", "local"),
