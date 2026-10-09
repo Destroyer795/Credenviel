@@ -47,3 +47,4 @@ _pdf_text.txt
 *.log
 scale_test_results.csv
 /*Report*.pdf
+scratch/

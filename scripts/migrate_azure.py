@@ -38,7 +38,7 @@ def ensure_firewall_rule(cfg: dict, target_host: str) -> None:
             "--end-ip-address", my_ip,
         ], check=False, capture_output=True, text=True)
         if res.returncode == 0:
-            print(f"[✓] Firewall rule verified for {my_ip}")
+            print(f"[OK] Firewall rule verified for {my_ip}")
         else:
             print(f"[!] Note: Firewall rule check: {res.stderr.strip() or res.stdout.strip()}")
     except Exception as e:
@@ -64,6 +64,7 @@ def main():
         REPO_ROOT / "db" / "migrations" / "001_initial_schema.up.sql",
         REPO_ROOT / "db" / "migrations" / "002_status_guard.up.sql",
         REPO_ROOT / "db" / "migrations" / "003_review_rejection_guard.up.sql",
+        REPO_ROOT / "db" / "migrations" / "004_flexible_documents.up.sql",
     ]
 
     for mig in migrations:
@@ -80,17 +81,19 @@ def main():
         print(f"  - {mig.relative_to(REPO_ROOT)}")
     print("=" * 70)
     print("WARNING: This will apply migrations to the live Azure PostgreSQL database.")
-    print("Type 'yes' to proceed: ", end="", flush=True)
+    if "--yes" in sys.argv or "-y" in sys.argv:
+        confirmation = "yes"
+    else:
+        print("Type 'yes' to proceed: ", end="", flush=True)
+        try:
+            confirmation = sys.stdin.readline().strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nAborted.")
+            sys.exit(1)
 
-    try:
-        confirmation = sys.stdin.readline().strip()
-    except (KeyboardInterrupt, EOFError):
-        print("\nAborted.")
-        sys.exit(1)
-
-    if confirmation.lower() != "yes":
-        print("Aborted by user.")
-        sys.exit(1)
+        if confirmation.lower() != "yes":
+            print("Aborted by user.")
+            sys.exit(1)
 
     ensure_firewall_rule(cfg, target_host)
 
@@ -170,7 +173,7 @@ def main():
             print(f"[!] Migration failed: {e}", file=sys.stderr)
             sys.exit(1)
 
-    print("\n[✓] Migrations 001 and 002 applied successfully to Azure PostgreSQL!")
+    print("\n[OK] Migrations applied successfully to Azure PostgreSQL!")
 
 
 if __name__ == "__main__":
