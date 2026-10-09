@@ -57,6 +57,13 @@ def test_numeric_trailing_zeros():
     assert normalize_numeric(Decimal("90.00")) == "90"
 
 
+def test_empty_issue_date_is_optional():
+    """Missing OCR dates hash as null so failed extraction can reach review."""
+    fields = {"name": "", "issue_date": ""}
+    assert canonicalize_fields(fields)["issue_date"] is None
+    assert compute_fields_hash(fields)
+
+
 def test_property_key_ordering():
     """Key ordering in input dictionary does not change hash."""
     f1 = {

@@ -39,7 +39,7 @@ def normalize_string(val: Any) -> str | None:
     Empty or whitespace-only strings become None (JSON null).
     Booleans raise TypeError.
     """
-    if val is None:
+    if val is None or (isinstance(val, str) and not val.strip()):
         return None
     if isinstance(val, bool):
         raise TypeError("Booleans not permitted for text fields")
@@ -91,7 +91,7 @@ def normalize_numeric(val: Any) -> str | None:
 
 def normalize_date(val: Any) -> str | None:
     """Normalize issue_date. Must be a date object or valid YYYY-MM-DD string."""
-    if val is None:
+    if val is None or (isinstance(val, str) and not val.strip()):
         return None
     if isinstance(val, bool):
         raise TypeError("Booleans not permitted for date field")
