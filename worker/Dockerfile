@@ -22,4 +22,4 @@ COPY worker/worker /app/worker
 # Run as non-root user
 USER appuser
 
-ENTRYPOINT ["python", "-m", "worker", "--stub-extractor"]
+ENTRYPOINT ["python", "-m", "worker"]

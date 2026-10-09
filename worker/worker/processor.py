@@ -86,6 +86,16 @@ class WorkerProcessor:
             logger.info("Reconnecting to PostgreSQL database...")
             self.conn = psycopg.connect(self.database_url, autocommit=True)
 
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    ALTER TABLE records ADD COLUMN IF NOT EXISTS document_type TEXT NOT NULL DEFAULT 'grade_sheet';
+                    ALTER TABLE records ADD COLUMN IF NOT EXISTS attributes_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+                    CREATE INDEX IF NOT EXISTS idx_records_document_type ON records(document_type);
+                """)
+        except Exception as e:
+            logger.debug("Schema verification notice: %s", e)
+
         return self.conn
 
     def process_message(self, message: Message) -> str:
@@ -222,8 +232,10 @@ class WorkerProcessor:
                                 confidence_json,
                                 source_hash,
                                 fields_hash,
-                                verified_by_issuer
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                verified_by_issuer,
+                                document_type,
+                                attributes_json
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (job_id) DO UPDATE SET
                                 name = EXCLUDED.name,
                                 roll_number = EXCLUDED.roll_number,
@@ -234,7 +246,9 @@ class WorkerProcessor:
                                 issue_date = EXCLUDED.issue_date,
                                 confidence_json = EXCLUDED.confidence_json,
                                 source_hash = EXCLUDED.source_hash,
-                                fields_hash = EXCLUDED.fields_hash
+                                fields_hash = EXCLUDED.fields_hash,
+                                document_type = EXCLUDED.document_type,
+                                attributes_json = EXCLUDED.attributes_json
                             RETURNING public_verification_id
                             """,
                             (
@@ -250,6 +264,8 @@ class WorkerProcessor:
                                 source_hash,
                                 fields_hash,
                                 uploader_is_issuer,  # change A
+                                raw_fields.get("document_type") or "grade_sheet",
+                                Jsonb(raw_fields.get("attributes_json") or {}),
                             ),
                         )
 
