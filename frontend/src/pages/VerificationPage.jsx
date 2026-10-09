@@ -24,12 +24,19 @@ export function VerificationPage() {
   const [isRateLimited, setIsRateLimited] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const activeId = id || 'demo-cert'
-  const verifyUrl = typeof window !== 'undefined'
+  const activeId = (id || '').trim()
+  const verifyUrl = typeof window !== 'undefined' && activeId
     ? `${window.location.origin}/verify/${encodeURIComponent(activeId)}`
-    : `https://credenviel.ac.in/verify/${encodeURIComponent(activeId)}`
+    : `https://credenviel.ac.in/verify`
 
   useEffect(() => {
+    if (!activeId) {
+      setLoading(false)
+      setCertData(null)
+      setErrorMsg(null)
+      return
+    }
+
     setLoading(true)
     setErrorMsg(null)
     setIsRateLimited(false)
@@ -44,9 +51,9 @@ export function VerificationPage() {
           setIsRateLimited(true)
           setErrorMsg(err.message || 'Rate limit exceeded: maximum 30 requests per minute from this IP.')
         } else if (err.status === 404) {
-          setErrorMsg('No verified credential found matching this Public Verification ID.')
+          setErrorMsg(`No verified credential record found matching ID: ${activeId}`)
         } else {
-          setErrorMsg(err.message || 'Unable to retrieve verification record.')
+          setErrorMsg(err.message || 'Unable to retrieve verification record from registry.')
         }
       })
       .finally(() => {
@@ -102,6 +109,18 @@ export function VerificationPage() {
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
           Verifying cryptographic signatures and audit ledger...
+        </div>
+      ) : !activeId ? (
+        <div className="glass-panel" style={{ maxWidth: '680px', margin: '0 auto', textAlign: 'center', padding: '3.5rem 2rem', background: '#FFFFFF', border: '1px solid var(--border-ice)' }}>
+          <div style={{ margin: '0 auto 1.25rem', width: 64, height: 64, borderRadius: '50%', background: 'rgba(38, 127, 203, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <IconShield size={32} color="var(--ice-blue)" />
+          </div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.75rem' }}>
+            Ready for Credential Verification
+          </h2>
+          <p style={{ color: 'var(--text-sub)', fontSize: '0.92rem', lineHeight: 1.6, maxWidth: '520px', margin: '0 auto 1.5rem auto' }}>
+            Enter a Public Verification ID (UUID) above or scan the QR code printed on the official certificate to inspect its cryptographic integrity and institutional issuer confirmation.
+          </p>
         </div>
       ) : isRateLimited ? (
         <div className="glass-panel" style={{ maxWidth: '680px', margin: '0 auto', textAlign: 'center', padding: '3rem 2rem', borderColor: 'var(--status-amber)' }}>

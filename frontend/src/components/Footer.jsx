@@ -33,7 +33,7 @@ export function Footer() {
               <li><Link to="/student">Student Document Portal</Link></li>
               <li><Link to="/issuer">Registrar Dashboard</Link></li>
               <li><Link to="/issuer/review">Review Station</Link></li>
-              <li><Link to="/verify/demo-cert">Public Verifier</Link></li>
+              <li><Link to="/verify">Public Verifier</Link></li>
             </ul>
           </div>
 

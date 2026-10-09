@@ -49,6 +49,8 @@ export function Home() {
     const clean = searchVerifyId.trim()
     if (clean) {
       navigate(`/verify/${encodeURIComponent(clean)}`)
+    } else {
+      navigate('/verify')
     }
   }
 
@@ -177,7 +179,7 @@ export function Home() {
               type="text"
               className="auth-input"
               style={{ flex: 1, minWidth: '240px' }}
-              placeholder="Enter Public Verification ID (e.g. demo-cert)"
+              placeholder="Enter Public Verification ID (UUID)..."
               value={searchVerifyId}
               onChange={(e) => setSearchVerifyId(e.target.value)}
             />

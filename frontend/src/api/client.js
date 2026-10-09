@@ -1,4 +1,4 @@
-// API Client for Credenviel Backend with Seamless Offline Demo Fallback
+// API Client for Credenviel Backend (Production Azure Pipeline)
 
 const CLOUD_API_URL = 'https://ca-api-n2ivlk5gk235i.blackhill-c3a2b095.eastasia.azurecontainerapps.io'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || CLOUD_API_URL
@@ -11,68 +11,10 @@ export class ApiError extends Error {
   }
 }
 
-// In-memory / session store for offline mock jobs
-const MOCK_STORAGE_KEY = 'credenviel_mock_jobs'
-
-function getMockJobs() {
-  const saved = sessionStorage.getItem(MOCK_STORAGE_KEY)
-  if (saved) {
-    try {
-      return JSON.parse(saved)
-    } catch {
-      // ignore
-    }
-  }
-  const initial = [
-    {
-      id: 'job-789a-412b-review-demo',
-      filename: 'Alice_Chen_BSc_Computer_Science.pdf',
-      status: 'requires_review',
-      uploader_id: 'student-oid-alice',
-      uploader_name: 'Alice Chen',
-      size_bytes: 428012,
-      created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-      raw_blob_key: 'raw-certificates/job-789a-412b-review-demo/Alice_Chen_BSc_Computer_Science.pdf',
-      extracted_data: {
-        studentName: 'Alice Chen',
-        studentId: '2021-CS-0428',
-        degreeTitle: 'Bachelor of Science in Computer Science & Engineering',
-        institution: 'Department of Computing, Faculty of Engineering',
-        graduationDate: 'May 2025',
-        cgpa: '3.91 / 4.00',
-      },
-    },
-    {
-      id: 'job-102c-55fd-verified-demo',
-      filename: 'Official_Graduation_Degree.pdf',
-      status: 'processed',
-      uploader_id: 'student-oid-alice',
-      uploader_name: 'Alice Chen',
-      size_bytes: 512000,
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-      raw_blob_key: 'raw-certificates/job-102c-55fd-verified-demo/Official_Graduation_Degree.pdf',
-      extracted_data: {
-        studentName: 'Alice Chen',
-        studentId: '2021-CS-0428',
-        degreeTitle: 'Bachelor of Science in Computer Science',
-        institution: 'National Institute of Technology',
-        graduationDate: 'June 2025',
-        cgpa: '3.95 / 4.00',
-      },
-    },
-  ]
-  sessionStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(initial))
-  return initial
-}
-
-function saveMockJobs(jobs) {
-  sessionStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(jobs))
-}
-
-let backendAvailable = null
+let backendAvailable = true
 
 /**
- * Perform an authenticated API request
+ * Perform an authenticated API request against the Azure Go API backend
  */
 async function fetchWithAuth(endpoint, options = {}, authState = null) {
   const url = `${API_BASE_URL}${endpoint}`
@@ -81,12 +23,12 @@ async function fetchWithAuth(endpoint, options = {}, authState = null) {
     ...(options.headers || {}),
   }
 
-  // Inject Authorization Bearer token
+  // Inject Authorization Bearer token (Entra ID or signed token)
   if (authState?.token) {
     headers['Authorization'] = `Bearer ${authState.token}`
   }
 
-  // Inject dev headers as fallback for dev mode
+  // Inject context identity headers
   if (authState?.user) {
     const backendRole = authState.user.role === 'admin' ? 'issuer' : authState.user.role
     headers['X-Dev-Role'] = backendRole
@@ -104,16 +46,12 @@ async function fetchWithAuth(endpoint, options = {}, authState = null) {
     })
 
     if (!response.ok) {
-      if (response.status === 503) {
-        backendAvailable = false
-        throw new ApiError(503, 'Backend offline')
-      }
       let errorDetail = response.statusText
       try {
         const errBody = await response.json()
-        errorDetail = errBody.error || errBody.message || JSON.stringify(errBody)
+        errorDetail = errBody.message || errBody.error || JSON.stringify(errBody)
       } catch {
-        // not JSON
+        // Not JSON
       }
       throw new ApiError(response.status, `Request to ${endpoint} failed (${response.status}): ${errorDetail}`)
     }
@@ -125,7 +63,7 @@ async function fetchWithAuth(endpoint, options = {}, authState = null) {
 
     return response.json()
   } catch (err) {
-    if (err.name === 'TypeError' || err.status === 503 || err.message?.includes('offline')) {
+    if (err.name === 'TypeError' || err.status === 503 || err.message?.includes('Failed to fetch')) {
       backendAvailable = false
     }
     throw err
@@ -133,14 +71,14 @@ async function fetchWithAuth(endpoint, options = {}, authState = null) {
 }
 
 /**
- * Health check
+ * Health check endpoint
  */
 export async function checkHealth() {
   try {
     const res = await fetch(`${API_BASE_URL}/healthz`, { cache: 'no-store' })
     if (res.ok) {
       const data = await res.json()
-      backendAvailable = data.status !== 'offline'
+      backendAvailable = data.status === 'ok'
       return backendAvailable
     }
     backendAvailable = false
@@ -154,105 +92,52 @@ export async function checkHealth() {
 /**
  * Create a new digitization job
  * POST /api/v1/jobs
+ * Returns job ID, blob storage key, and temporary user-delegation SAS upload URL
  */
 export async function createJob({ filename, contentType, sizeBytes }, authState) {
-  try {
-    return await fetchWithAuth(
-      '/api/v1/jobs',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename,
-          content_type: contentType,
-          size_bytes: sizeBytes,
-        }),
-      },
-      authState
-    )
-  } catch (err) {
-    // Offline Demo fallback
-    console.info('[Credenviel Client] Backend API standby: creating job in interactive demo mode.')
-    const jobs = getMockJobs()
-    const mockId = 'job-' + Math.random().toString(36).substring(2, 8) + '-' + Date.now().toString(36).slice(-4)
-    const newJob = {
-      id: mockId,
-      filename: filename,
-      status: 'awaiting_upload',
-      uploader_id: authState?.user?.oid || 'student-oid-alice',
-      uploader_name: authState?.user?.name || 'Alice Chen',
-      size_bytes: sizeBytes,
-      created_at: new Date().toISOString(),
-      raw_blob_key: `raw-certificates/${mockId}/${filename}`,
-      extracted_data: {
-        studentName: authState?.user?.name || 'Alice Chen',
-        studentId: '2022-CS-042',
-        degreeTitle: 'Bachelor of Technology in Computer Science',
-        institution: 'National Institute of Technology',
-        graduationDate: 'May 2025',
-        cgpa: '3.88 / 4.00',
-      },
-    }
-    jobs.unshift(newJob)
-    saveMockJobs(jobs)
+  const res = await fetchWithAuth(
+    '/api/v1/jobs',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename,
+        content_type: contentType,
+        size_bytes: sizeBytes,
+      }),
+    },
+    authState
+  )
 
-    return {
-      job_id: mockId,
-      upload_url: `/mock-upload/${mockId}`,
-      raw_blob_key: newJob.raw_blob_key,
-    }
+  return {
+    job_id: res.job_id,
+    upload_url: res.upload?.url || res.upload_url,
+    raw_blob_key: res.blob_key || res.raw_blob_key,
+    upload_headers: res.upload?.headers || {},
+    status: res.status || 'awaiting_upload',
   }
 }
 
 /**
- * Upload file bytes
+ * Direct file upload to Azure Blob Storage via signed user-delegation SAS URL
  */
-export async function uploadFileToBlob(uploadUrl, file, onProgress = null) {
-  if (uploadUrl.startsWith('/mock-upload')) {
-    // Simulate real-time progress
-    if (onProgress) {
-      onProgress(30)
-      await new Promise((r) => setTimeout(r, 150))
-      onProgress(70)
-      await new Promise((r) => setTimeout(r, 150))
-      onProgress(100)
-    }
-
-    const mockId = uploadUrl.replace('/mock-upload/', '')
-    const jobs = getMockJobs()
-    const job = jobs.find((j) => j.id === mockId)
-    if (job) {
-      job.status = 'queued'
-      saveMockJobs(jobs)
-
-      // Simulate pipeline progression
-      setTimeout(() => {
-        const current = getMockJobs()
-        const j = current.find((item) => item.id === mockId)
-        if (j) {
-          j.status = 'processing'
-          saveMockJobs(current)
-        }
-      }, 1500)
-
-      setTimeout(() => {
-        const current = getMockJobs()
-        const j = current.find((item) => item.id === mockId)
-        if (j) {
-          j.status = 'processed'
-          saveMockJobs(current)
-        }
-      }, 3500)
-    }
-    return true
+export async function uploadFileToBlob(uploadUrl, file, onProgress = null, extraHeaders = {}) {
+  if (!uploadUrl) {
+    throw new ApiError(400, 'Invalid upload URL received from backend')
   }
 
   const isAzureBlob = uploadUrl.includes('.blob.core.windows.net') || uploadUrl.includes('sig=')
   const headers = {
     'Content-Type': file.type || 'application/pdf',
+    ...(extraHeaders || {}),
   }
+
   if (isAzureBlob) {
     headers['x-ms-blob-type'] = 'BlockBlob'
+  }
+
+  if (onProgress) {
+    onProgress(20)
   }
 
   const response = await fetch(uploadUrl, {
@@ -262,7 +147,7 @@ export async function uploadFileToBlob(uploadUrl, file, onProgress = null) {
   })
 
   if (!response.ok) {
-    throw new ApiError(response.status, `Failed to upload document bytes to storage (${response.status})`)
+    throw new ApiError(response.status, `Failed to upload document bytes to storage (${response.status}): ${response.statusText}`)
   }
 
   if (onProgress) {
@@ -277,30 +162,7 @@ export async function uploadFileToBlob(uploadUrl, file, onProgress = null) {
  * GET /api/v1/jobs/{id}
  */
 export async function getJob(jobId, authState) {
-  try {
-    return await fetchWithAuth(`/api/v1/jobs/${jobId}`, { method: 'GET' }, authState)
-  } catch {
-    const jobs = getMockJobs()
-    const found = jobs.find((j) => j.id === jobId)
-    if (found) return found
-    return {
-      id: jobId,
-      filename: 'Sample_Certificate.pdf',
-      status: 'requires_review',
-      uploader_name: 'Alice Chen',
-      size_bytes: 428000,
-      created_at: new Date().toISOString(),
-      raw_blob_key: `raw-certificates/${jobId}/Sample_Certificate.pdf`,
-      extracted_data: {
-        studentName: 'Alice Chen',
-        studentId: '2021-CS-0428',
-        degreeTitle: 'Bachelor of Science in Computer Science & Engineering',
-        institution: 'Faculty of Engineering, Department of Computing',
-        graduationDate: 'May 2025',
-        cgpa: '3.91 / 4.00',
-      },
-    }
-  }
+  return await fetchWithAuth(`/api/v1/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' }, authState)
 }
 
 /**
@@ -308,24 +170,12 @@ export async function getJob(jobId, authState) {
  * GET /api/v1/jobs?status=...
  */
 export async function listJobs(filter = {}, authState) {
-  try {
-    const query = new URLSearchParams()
-    if (filter.status) query.set('status', filter.status)
-    if (filter.limit) query.set('limit', filter.limit)
+  const query = new URLSearchParams()
+  if (filter.status && filter.status !== 'all') query.set('status', filter.status)
+  if (filter.limit) query.set('limit', filter.limit)
 
-    const qs = query.toString() ? `?${query.toString()}` : ''
-    return await fetchWithAuth(`/api/v1/jobs${qs}`, { method: 'GET' }, authState)
-  } catch {
-    // Return mock jobs filtered for this role
-    let jobs = getMockJobs()
-    if (authState?.user?.role === 'student') {
-      jobs = jobs.filter((j) => j.uploader_id === authState.user.oid || !j.uploader_id)
-    }
-    if (filter.status && filter.status !== 'all') {
-      jobs = jobs.filter((j) => j.status === filter.status)
-    }
-    return jobs
-  }
+  const qs = query.toString() ? `?${query.toString()}` : ''
+  return await fetchWithAuth(`/api/v1/jobs${qs}`, { method: 'GET' }, authState)
 }
 
 /**
@@ -333,68 +183,17 @@ export async function listJobs(filter = {}, authState) {
  * GET /api/v1/verify/{id}
  */
 export async function getVerification(verificationId) {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/verify/${encodeURIComponent(verificationId)}`)
-    if (res.ok) {
-      return await res.json()
-    }
+  const res = await fetch(`${API_BASE_URL}/api/v1/verify/${encodeURIComponent(verificationId)}`)
+  if (!res.ok) {
     if (res.status === 429) {
       throw new ApiError(429, 'Rate limit exceeded: maximum 30 requests per minute from this IP address.')
     }
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 429) throw err
-  }
-
-  // Check in-session mock jobs
-  const mockJobs = getMockJobs()
-  const found = mockJobs.find((j) => j.id === verificationId)
-  if (found) {
-    return {
-      verified: true,
-      public_verification_id: found.id,
-      verification_id: found.id,
-      source_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      fields_hash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
-      name: found.extracted_data?.studentName || 'Alice Chen',
-      student_name: found.extracted_data?.studentName || 'Alice Chen',
-      roll_number: found.extracted_data?.studentId || '2021-CS-0428',
-      degree: found.extracted_data?.degreeTitle || 'Bachelor of Science in Computer Science & Engineering',
-      institution: found.extracted_data?.institution || 'National Institute of Technology',
-      cgpa: found.extracted_data?.cgpa || '3.91',
-      issue_date: found.extracted_data?.graduationDate || '2025-05-15',
-      verified_by_issuer: true,
-      issued_at: found.created_at || new Date().toISOString(),
-      tamper_status: 'VALID_UNALTERED',
-      signature_algorithm: 'Canonical SHA-256 Digest • Issuer Confirmed (DPDP Act 2023)',
+    if (res.status === 404) {
+      throw new ApiError(404, 'No verified credential found matching this Public Verification ID.')
     }
+    throw new ApiError(res.status, `Verification lookup failed (${res.status})`)
   }
-
-  // Fallback demo certificate for demo-cert or demo job IDs
-  if (verificationId === 'demo-cert' || verificationId?.startsWith('job-')) {
-    return {
-      verified: true,
-      public_verification_id: verificationId,
-      verification_id: verificationId,
-      source_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      fields_hash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
-      name: 'Alice Chen',
-      student_name: 'Alice Chen',
-      roll_number: '2021-CS-0428',
-      degree: 'Bachelor of Science in Computer Science & Engineering',
-      degree_title: 'Bachelor of Science in Computer Science & Engineering',
-      institution: 'National Institute of Technology',
-      cgpa: '3.91',
-      issue_date: '2025-05-15',
-      graduation_date: 'May 2025',
-      issuer_name: 'University Exam Cell Staff',
-      verified_by_issuer: true,
-      issued_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-      tamper_status: 'VALID_UNALTERED',
-      signature_algorithm: 'Canonical SHA-256 Digest • Issuer Confirmed (DPDP Act 2023)',
-    }
-  }
-
-  throw new ApiError(404, 'No verified credential found matching this ID.')
+  return await res.json()
 }
 
 /**
@@ -405,11 +204,8 @@ export async function negotiateSignalR(authState) {
   try {
     return await fetchWithAuth('/api/v1/signalr/negotiate', { method: 'POST' }, authState)
   } catch (err) {
-    console.warn('SignalR negotiation failed, using local polling fallback:', err)
-    return {
-      url: '/dev/signalr/hub',
-      accessToken: 'dev-token-fallback',
-    }
+    console.warn('SignalR negotiation not active, relying on HTTP polling interval:', err)
+    return null
   }
 }
 
@@ -418,38 +214,7 @@ export async function negotiateSignalR(authState) {
  * GET /api/v1/review/{jobId}
  */
 export async function getReviewDetails(jobId, authState) {
-  try {
-    return await fetchWithAuth(`/api/v1/review/${encodeURIComponent(jobId)}`, { method: 'GET' }, authState)
-  } catch (err) {
-    console.warn('API review details fetch failed, falling back to mock review data:', err)
-    return {
-      job: {
-        id: jobId,
-        status: 'needs_review',
-        blob_key: `raw-uploads/${jobId}/Sample_Certificate.pdf`,
-      },
-      record: {
-        name: 'Alice Chen',
-        roll_number: '2021-CS-0428',
-        register_number: 'REG-987654',
-        degree: 'Bachelor of Science in Computer Science & Engineering',
-        cgpa: '3.91',
-        issue_date: '2025-05-15',
-        confidence_json: {
-          threshold: 0.85,
-          fields: {
-            name: 0.98,
-            roll_number: 0.72,
-            register_number: 0.95,
-            degree: 0.96,
-            cgpa: 0.79,
-            issue_date: 0.93,
-          },
-        },
-      },
-      read_sas_url: '',
-    }
-  }
+  return await fetchWithAuth(`/api/v1/review/${encodeURIComponent(jobId)}`, { method: 'GET' }, authState)
 }
 
 /**
@@ -457,24 +222,15 @@ export async function getReviewDetails(jobId, authState) {
  * POST /api/v1/review/{jobId}/resolve
  */
 export async function resolveReview(jobId, payload, authState) {
-  try {
-    return await fetchWithAuth(
-      `/api/v1/review/${encodeURIComponent(jobId)}/resolve`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
-      authState
-    )
-  } catch (err) {
-    console.warn('API resolveReview failed, mocking success:', err)
-    return {
-      status: 'processed',
-      job_id: jobId,
-      fields_hash: 'mock-recomputed-fields-hash-a9c10c88',
-    }
-  }
+  return await fetchWithAuth(
+    `/api/v1/review/${encodeURIComponent(jobId)}/resolve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    authState
+  )
 }
 
 /**
@@ -482,24 +238,15 @@ export async function resolveReview(jobId, payload, authState) {
  * POST /api/v1/review/{jobId}/reject
  */
 export async function rejectReview(jobId, reason, authState) {
-  try {
-    return await fetchWithAuth(
-      `/api/v1/review/${encodeURIComponent(jobId)}/reject`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rejection_reason: reason }),
-      },
-      authState
-    )
-  } catch (err) {
-    console.warn('API rejectReview failed, mocking rejection:', err)
-    return {
-      status: 'failed',
-      job_id: jobId,
-      rejection_reason: reason,
-    }
-  }
+  return await fetchWithAuth(
+    `/api/v1/review/${encodeURIComponent(jobId)}/reject`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rejection_reason: reason }),
+    },
+    authState
+  )
 }
 
 /**
@@ -507,12 +254,5 @@ export async function rejectReview(jobId, reason, authState) {
  * GET /api/v1/review
  */
 export async function listReviewQueue(authState) {
-  try {
-    return await fetchWithAuth('/api/v1/review', { method: 'GET' }, authState)
-  } catch (err) {
-    console.warn('API listReviewQueue failed, returning mock queue:', err)
-    const jobs = getMockJobs()
-    return jobs.filter((j) => j.status === 'needs_review' || j.status === 'requires_review')
-  }
+  return await fetchWithAuth('/api/v1/review', { method: 'GET' }, authState)
 }
-

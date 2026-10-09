@@ -131,7 +131,7 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1 }) {
         <div style={{ textAlign: 'left', fontSize: '0.72rem' }}>
           <div><strong>Date of Issue:</strong> {formData.issue_date || '2025-05-15'}</div>
           <div><strong>Ledger Folio:</strong> NIT-CONV-2025/892</div>
-          <div style={{ fontSize: '0.65rem', color: '#786F60', marginTop: '0.25rem' }}>Scan ID: {jobId ? jobId.slice(0, 16) : 'DEMO-ARCHIVE'}</div>
+          <div style={{ fontSize: '0.65rem', color: '#786F60', marginTop: '0.25rem' }}>Scan ID: {jobId ? jobId.slice(0, 16) : 'PENDING-SCAN'}</div>
         </div>
 
         {/* Physical Blue Stamp / Signature */}
@@ -317,7 +317,12 @@ export function ReviewScreen() {
 
   // Fetch job & record details when currentJobId changes
   useEffect(() => {
-    const targetId = requestedJobId || currentJobId || 'job-789a-412b-review-demo'
+    const targetId = requestedJobId || currentJobId || (queue.length > 0 ? queue[0].id : null)
+    if (!targetId) {
+      setCurrentJobId(null)
+      setLoading(false)
+      return
+    }
     setCurrentJobId(targetId)
     setLoading(true)
 
@@ -478,7 +483,7 @@ export function ReviewScreen() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>Target Job:</span>
             <code style={{ background: 'var(--bg-frost)', padding: '0.2rem 0.6rem', borderRadius: 6, fontSize: '0.8rem', color: 'var(--slate-blue-dark)', border: '1px solid var(--border-subtle)' }}>
-              {currentJobId ? `${currentJobId.slice(0, 16)}...` : 'demo-review'}
+              {currentJobId ? `${currentJobId.slice(0, 16)}...` : 'None (Queue Clear)'}
             </code>
           </div>
         </div>
@@ -532,6 +537,22 @@ export function ReviewScreen() {
           </div>
           <Link to="/issuer" className="btn btn-secondary">
             Return to Exam Cell Queue
+          </Link>
+        </div>
+      ) : !currentJobId && queue.length === 0 ? (
+        <div className="glass-panel" style={{ textAlign: 'center', padding: '4rem 2rem', background: '#FFFFFF', border: '1px solid var(--border-ice)', borderRadius: '12px' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#F0FDF4', border: '2px solid #86EFAC', margin: '0 auto 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A' }}>
+            <IconCheck size={32} />
+          </div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.5rem' }}>
+            Human Review Queue is Clear
+          </h2>
+          <p style={{ color: 'var(--text-sub)', maxWidth: '540px', margin: '0 auto 1.5rem', fontSize: '0.92rem', lineHeight: 1.6 }}>
+            There are no documents currently requiring manual audit. Archival certificates uploaded by the Exam Cell with OCR field confidence below the 0.85 threshold will appear here for side-by-side inspection.
+          </p>
+          <Link to="/issuer" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+            <IconUpload size={16} />
+            <span>Go to Archival Bulk Ingest</span>
           </Link>
         </div>
       ) : (

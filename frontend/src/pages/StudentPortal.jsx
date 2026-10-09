@@ -143,13 +143,10 @@ export function StudentPortal() {
         </p>
       </div>
 
-      {/* Verified Academic Credential & QR Code Showcase */}
+      {/* Verified Academic Credential & QR Code Showcase (Real Processed Records Only) */}
       {(() => {
-        const verifiedJob = jobs.find((j) => j.status === 'processed') || {
-          id: 'job-102c-55fd-verified-demo',
-          filename: 'Official_Graduation_Degree.pdf',
-          status: 'processed',
-        }
+        const verifiedJob = jobs.find((j) => j.status === 'processed')
+        if (!verifiedJob) return null
 
         return (
           <div
@@ -176,10 +173,10 @@ export function StudentPortal() {
                     </span>
                   </div>
                   <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 0.25rem 0' }}>
-                    Bachelor of Science in Computer Science & Engineering
+                    {verifiedJob.filename || 'Official Academic Degree'}
                   </h3>
                   <div style={{ fontSize: '0.82rem', color: 'var(--text-sub)' }}>
-                    Candidate: <strong>{auth.user?.name || 'Alice Chen'}</strong> • Roll No: <strong>2021-CS-0428</strong> • CGPA: <strong>3.91</strong>
+                    Candidate: <strong>{auth.user?.name || 'Student Candidate'}</strong>
                   </div>
                   <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue-light)', marginTop: '0.35rem', fontFamily: 'var(--font-mono)' }}>
                     Public Verification ID: {verifiedJob.id}
