@@ -58,6 +58,16 @@ param internalApiKey string = ''
 @description('Container image tag for Worker (read from WORKER_IMAGE_TAG env). Empty when apps not yet deployed.')
 param workerImageTag string = ''
 
+@description('Azure Document Intelligence endpoint used by the worker')
+param docIntelligenceEndpoint string = ''
+
+@secure()
+@description('Azure Document Intelligence API key used by the worker')
+param docIntelligenceKey string = ''
+
+@description('Document Intelligence model ID')
+param docIntelligenceModelId string = 'prebuilt-layout'
+
 @description('Deploy compute applications (Worker and Function). False on initial infra pass.')
 param deployApps bool = false
 
@@ -205,6 +215,9 @@ module workerApp 'modules/worker-app.bicep' = if (deployApps && !empty(workerIma
     serviceBusQueueName: serviceBus.outputs.queueName
     postgresPassword: existingKeyVault.getSecret('postgres-admin-password')
     postgresFqdn: postgres.?outputs.serverFqdn ?? defaultPostgresFqdn
+    docIntelligenceEndpoint: docIntelligenceEndpoint
+    docIntelligenceKey: docIntelligenceKey
+    docIntelligenceModelId: docIntelligenceModelId
   }
 }
 

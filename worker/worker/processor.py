@@ -221,7 +221,14 @@ class WorkerProcessor:
             if self.before_finalize:
                 self.before_finalize(job_id)
 
-            final_status = "processed" if all_passed else "needs_review"
+            extracted_fields = extraction.fields
+            has_extracted_data = any(
+                extracted_fields.get(field)
+                for field in ("name", "roll_number", "register_number", "degree", "cgpa", "issue_date")
+            ) or bool(extracted_fields.get("marks")) or bool(extracted_fields.get("attributes_json"))
+            final_status = "processed" if all_passed and has_extracted_data else "needs_review"
+            if not has_extracted_data:
+                logger.warning("OCR returned no structured fields for job %s; routing to needs_review", job_id)
 
             # 5. One ACID transaction: SELECT FOR UPDATE, upsert record, update status
             with self.conn.transaction():

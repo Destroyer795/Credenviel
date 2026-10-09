@@ -65,6 +65,16 @@ param databaseName string = 'credenviel'
 @description('Database user')
 param databaseUser string = 'credenvieladmin'
 
+@description('Azure Document Intelligence endpoint')
+param docIntelligenceEndpoint string = ''
+
+@secure()
+@description('Azure Document Intelligence API key')
+param docIntelligenceKey string = ''
+
+@description('Document Intelligence model ID')
+param docIntelligenceModelId string = 'prebuilt-layout'
+
 @description('Minimum replicas (1 for active worker on express/consumption environment)')
 param minReplicas int = 1
 
@@ -112,10 +122,18 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'acr-password'
           value: registryPassword
         }
+        {
+          name: 'doc-intelligence-key'
+          value: docIntelligenceKey
+        }
       ] : [
         {
           name: 'postgres-password'
           value: postgresPassword
+        }
+        {
+          name: 'doc-intelligence-key'
+          value: docIntelligenceKey
         }
       ]
     }
@@ -128,7 +146,6 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
             'python'
             '-m'
             'worker'
-            '--stub-extractor'
           ]
           resources: {
             cpu: json('0.25')
@@ -162,6 +179,18 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'CONFIDENCE_THRESHOLD'
               value: confidenceThreshold
+            }
+            {
+              name: 'DOC_INTELLIGENCE_ENDPOINT'
+              value: docIntelligenceEndpoint
+            }
+            {
+              name: 'DOC_INTELLIGENCE_KEY'
+              secretRef: 'doc-intelligence-key'
+            }
+            {
+              name: 'DOC_INTELLIGENCE_MODEL_ID'
+              value: docIntelligenceModelId
             }
             {
               name: 'PGHOST'
