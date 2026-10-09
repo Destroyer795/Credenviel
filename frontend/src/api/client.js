@@ -19,24 +19,12 @@ let backendAvailable = true
 async function fetchWithAuth(endpoint, options = {}, authState = null) {
   const url = `${API_BASE_URL}${endpoint}`
   const headers = {
-    Accept: 'application/json',
     ...(options.headers || {}),
   }
 
   // Inject Authorization Bearer token (Entra ID or signed token)
   if (authState?.token) {
     headers['Authorization'] = `Bearer ${authState.token}`
-  }
-
-  // Inject context identity headers
-  if (authState?.user) {
-    const backendRole = authState.user.role === 'admin' ? 'issuer' : authState.user.role
-    headers['X-Dev-Role'] = backendRole
-    headers['X-Dev-User'] = authState.user.oid
-    headers['X-Dev-Name'] = authState.user.name
-    headers['X-User-Role'] = backendRole
-    headers['X-User-ID'] = authState.user.oid
-    headers['X-User-Name'] = authState.user.name
   }
 
   try {
