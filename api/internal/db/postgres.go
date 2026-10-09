@@ -32,6 +32,13 @@ func New(ctx context.Context, dsn string) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
+	// Ensure flexible document columns exist
+	_, _ = pool.Exec(ctx, `
+		ALTER TABLE records ADD COLUMN IF NOT EXISTS document_type TEXT NOT NULL DEFAULT 'grade_sheet';
+		ALTER TABLE records ADD COLUMN IF NOT EXISTS attributes_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+		CREATE INDEX IF NOT EXISTS idx_records_document_type ON records(document_type);
+	`)
+
 	return &DB{pool: pool}, nil
 }
 
@@ -179,13 +186,14 @@ func (d *DB) GetByJobID(ctx context.Context, jobID string) (*records.Record, err
 		SELECT id, job_id, name, roll_number, register_number, degree,
 		       marks_json, cgpa::text, issue_date::text, confidence_json,
 		       source_hash, fields_hash, public_verification_id, verified_by_issuer,
-		       reviewed_by, reviewed_at, corrections_json, created_at
+		       reviewed_by, reviewed_at, corrections_json, created_at,
+		       coalesce(document_type, 'grade_sheet'), coalesce(attributes_json, '{}'::jsonb)
 		FROM records
 		WHERE job_id = $1
 	`
 
 	var r records.Record
-	var marksBytes, confBytes, corrBytes []byte
+	var marksBytes, confBytes, corrBytes, attrBytes []byte
 
 	err := d.pool.QueryRow(ctx, query, jobID).Scan(
 		&r.ID,
@@ -206,6 +214,8 @@ func (d *DB) GetByJobID(ctx context.Context, jobID string) (*records.Record, err
 		&r.ReviewedAt,
 		&corrBytes,
 		&r.CreatedAt,
+		&r.DocumentType,
+		&attrBytes,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || strings.Contains(err.Error(), "22P02") {
@@ -223,6 +233,9 @@ func (d *DB) GetByJobID(ctx context.Context, jobID string) (*records.Record, err
 	if len(corrBytes) > 0 {
 		_ = json.Unmarshal(corrBytes, &r.CorrectionsJSON)
 	}
+	if len(attrBytes) > 0 {
+		_ = json.Unmarshal(attrBytes, &r.AttributesJSON)
+	}
 
 	return &r, nil
 }
@@ -233,13 +246,14 @@ func (d *DB) GetByPublicVerificationID(ctx context.Context, publicVerificationID
 		SELECT id, job_id, name, roll_number, register_number, degree,
 		       marks_json, cgpa::text, issue_date::text, confidence_json,
 		       source_hash, fields_hash, public_verification_id, verified_by_issuer,
-		       reviewed_by, reviewed_at, corrections_json, created_at
+		       reviewed_by, reviewed_at, corrections_json, created_at,
+		       coalesce(document_type, 'grade_sheet'), coalesce(attributes_json, '{}'::jsonb)
 		FROM records
 		WHERE public_verification_id = $1 OR job_id = $1
 	`
 
 	var r records.Record
-	var marksBytes, confBytes, corrBytes []byte
+	var marksBytes, confBytes, corrBytes, attrBytes []byte
 
 	err := d.pool.QueryRow(ctx, query, publicVerificationID).Scan(
 		&r.ID,
@@ -260,6 +274,8 @@ func (d *DB) GetByPublicVerificationID(ctx context.Context, publicVerificationID
 		&r.ReviewedAt,
 		&corrBytes,
 		&r.CreatedAt,
+		&r.DocumentType,
+		&attrBytes,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || strings.Contains(err.Error(), "22P02") {
@@ -276,6 +292,9 @@ func (d *DB) GetByPublicVerificationID(ctx context.Context, publicVerificationID
 	}
 	if len(corrBytes) > 0 {
 		_ = json.Unmarshal(corrBytes, &r.CorrectionsJSON)
+	}
+	if len(attrBytes) > 0 {
+		_ = json.Unmarshal(attrBytes, &r.AttributesJSON)
 	}
 
 	return &r, nil
@@ -312,6 +331,11 @@ func (d *DB) Resolve(ctx context.Context, jobID string, resolved records.Resolve
 		return fmt.Errorf("failed to marshal corrections diff: %w", err)
 	}
 
+	var attrsJSON []byte
+	if resolved.AttributesJSON != nil {
+		attrsJSON, _ = json.Marshal(resolved.AttributesJSON)
+	}
+
 	updateRecordQuery := `
 		UPDATE records
 		SET name = $2,
@@ -325,7 +349,9 @@ func (d *DB) Resolve(ctx context.Context, jobID string, resolved records.Resolve
 		    verified_by_issuer = true,
 		    reviewed_by = $10,
 		    reviewed_at = clock_timestamp(),
-		    corrections_json = coalesce(corrections_json, '{}'::jsonb) || $11::jsonb
+		    corrections_json = coalesce(corrections_json, '{}'::jsonb) || $11::jsonb,
+		    document_type = coalesce($12, document_type),
+		    attributes_json = coalesce($13::jsonb, attributes_json)
 		WHERE job_id = $1
 	`
 	_, err = tx.Exec(ctx, updateRecordQuery,
@@ -340,6 +366,8 @@ func (d *DB) Resolve(ctx context.Context, jobID string, resolved records.Resolve
 		fieldsHash,
 		reviewerID,
 		diffJSON,
+		resolved.DocumentType,
+		attrsJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update record: %w", err)

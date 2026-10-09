@@ -22,6 +22,8 @@ type Record struct {
 	MarksJSON            any        `json:"marks_json"`
 	CGPA                 *string    `json:"cgpa"`
 	IssueDate            *string    `json:"issue_date"`
+	DocumentType         string     `json:"document_type"`
+	AttributesJSON       any        `json:"attributes_json"`
 	ConfidenceJSON       any        `json:"confidence_json"`
 	SourceHash           string     `json:"source_hash"`
 	FieldsHash           string     `json:"fields_hash"`
@@ -42,6 +44,8 @@ type ResolvedFields struct {
 	MarksJSON      any     `json:"marks_json"`
 	CGPA           *string `json:"cgpa"`
 	IssueDate      *string `json:"issue_date"`
+	DocumentType   *string `json:"document_type,omitempty"`
+	AttributesJSON any     `json:"attributes_json,omitempty"`
 }
 
 // PublicVerification defines the public fields visible on the verification lookup page.
@@ -54,6 +58,8 @@ type PublicVerification struct {
 	Degree               *string   `json:"degree"`
 	CGPA                 *string   `json:"cgpa"`
 	IssueDate            *string   `json:"issue_date"`
+	DocumentType         string    `json:"document_type"`
+	AttributesJSON       any       `json:"attributes_json,omitempty"`
 	SourceHash           string    `json:"source_hash"`
 	FieldsHash           string    `json:"fields_hash"`
 	VerifiedByIssuer     bool      `json:"verified_by_issuer"`

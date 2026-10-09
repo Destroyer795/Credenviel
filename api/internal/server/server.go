@@ -474,6 +474,9 @@ type resolveReviewRequest struct {
 	MarksJSON      any     `json:"marks_json"`
 	CGPA           *string `json:"cgpa"`
 	IssueDate      *string `json:"issue_date"`
+	DocumentType   *string `json:"document_type"`
+	Attributes     any     `json:"attributes"`
+	AttributesJSON any     `json:"attributes_json"`
 	Notes          string  `json:"notes"`
 }
 
@@ -505,6 +508,11 @@ func (s *Server) handleResolveReview(w http.ResponseWriter, r *http.Request) {
 		marks = req.MarksJSON
 	}
 
+	attrs := req.Attributes
+	if attrs == nil {
+		attrs = req.AttributesJSON
+	}
+
 	fieldsMap := map[string]any{
 		"name":            req.Name,
 		"roll_number":     req.RollNumber,
@@ -513,6 +521,8 @@ func (s *Server) handleResolveReview(w http.ResponseWriter, r *http.Request) {
 		"marks_json":      marks,
 		"cgpa":            req.CGPA,
 		"issue_date":      req.IssueDate,
+		"document_type":   req.DocumentType,
+		"attributes_json": attrs,
 	}
 
 	fieldsHash, err := normalizer.ComputeFieldsHash(fieldsMap)
@@ -536,6 +546,8 @@ func (s *Server) handleResolveReview(w http.ResponseWriter, r *http.Request) {
 			"marks_json":      existingRecord.MarksJSON,
 			"cgpa":            existingRecord.CGPA,
 			"issue_date":      existingRecord.IssueDate,
+			"document_type":   existingRecord.DocumentType,
+			"attributes_json": existingRecord.AttributesJSON,
 			"fields_hash":     existingRecord.FieldsHash,
 		}
 	}
@@ -548,6 +560,8 @@ func (s *Server) handleResolveReview(w http.ResponseWriter, r *http.Request) {
 		MarksJSON:      marks,
 		CGPA:           req.CGPA,
 		IssueDate:      req.IssueDate,
+		DocumentType:   req.DocumentType,
+		AttributesJSON: attrs,
 	}
 
 	if err := s.recordRepo.Resolve(r.Context(), jobID, resolved, fieldsHash, diff, user.ID); err != nil {
@@ -680,6 +694,8 @@ func (s *Server) handlePublicVerify(w http.ResponseWriter, r *http.Request) {
 		Degree:               rec.Degree,
 		CGPA:                 rec.CGPA,
 		IssueDate:            rec.IssueDate,
+		DocumentType:         rec.DocumentType,
+		AttributesJSON:       rec.AttributesJSON,
 		SourceHash:           rec.SourceHash,
 		FieldsHash:           rec.FieldsHash,
 		VerifiedByIssuer:     rec.VerifiedByIssuer,

@@ -159,12 +159,12 @@ def normalize_marks(val: Any) -> list[dict[str, Any]] | None:
 
 
 def canonicalize_fields(fields: dict[str, Any]) -> dict[str, Any]:
-    """Normalize all 7 canonical fields into canonical structure."""
+    """Normalize all canonical fields into canonical structure."""
     marks_val = fields.get("marks_json")
     if marks_val is None:
         marks_val = fields.get("marks")
 
-    return {
+    res = {
         "name": normalize_string(fields.get("name")),
         "roll_number": normalize_string(fields.get("roll_number")),
         "register_number": normalize_string(fields.get("register_number")),
@@ -173,6 +173,31 @@ def canonicalize_fields(fields: dict[str, Any]) -> dict[str, Any]:
         "cgpa": normalize_numeric(fields.get("cgpa")),
         "issue_date": normalize_date(fields.get("issue_date")),
     }
+
+    doc_type = normalize_string(fields.get("document_type"))
+    if doc_type and doc_type != "grade_sheet":
+        res["document_type"] = doc_type
+
+    attrs_val = fields.get("attributes")
+    if attrs_val is None:
+        attrs_val = fields.get("attributes_json")
+    if attrs_val:
+        if isinstance(attrs_val, str):
+            try:
+                attrs_val = json.loads(attrs_val)
+            except Exception:
+                attrs_val = {}
+        if isinstance(attrs_val, dict) and attrs_val:
+            norm_attrs = {}
+            for k in sorted(attrs_val.keys()):
+                k_norm = normalize_string(k)
+                v_norm = normalize_string(attrs_val[k])
+                if k_norm and v_norm:
+                    norm_attrs[k_norm] = v_norm
+            if norm_attrs:
+                res["attributes"] = norm_attrs
+
+    return res
 
 
 def to_canonical_json(fields: dict[str, Any]) -> str:

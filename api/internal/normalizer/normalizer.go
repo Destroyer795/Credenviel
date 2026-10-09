@@ -32,15 +32,17 @@ type MarksRow struct {
 	Grade         *string `json:"grade"`
 }
 
-// CanonicalFields represents the normalized 7 core fields in exact canonical order.
+// CanonicalFields represents the normalized fields in exact canonical order.
 type CanonicalFields struct {
-	Name           *string    `json:"name"`
-	RollNumber     *string    `json:"roll_number"`
-	RegisterNumber *string    `json:"register_number"`
-	Degree         *string    `json:"degree"`
-	MarksJSON      []MarksRow `json:"marks_json"`
-	CGPA           *string    `json:"cgpa"`
-	IssueDate      *string    `json:"issue_date"`
+	Name           *string           `json:"name"`
+	RollNumber     *string           `json:"roll_number"`
+	RegisterNumber *string           `json:"register_number"`
+	Degree         *string           `json:"degree"`
+	MarksJSON      []MarksRow        `json:"marks_json"`
+	CGPA           *string           `json:"cgpa"`
+	IssueDate      *string           `json:"issue_date"`
+	DocumentType   *string           `json:"document_type,omitempty"`
+	Attributes     map[string]string `json:"attributes,omitempty"`
 }
 
 // NormalizeString applies NFC -> collapse whitespace -> trim -> lower -> NFC.
@@ -232,7 +234,7 @@ func NormalizeMarks(val any) ([]MarksRow, error) {
 	return rows, nil
 }
 
-// CanonicalizeFields normalizes all 7 canonical fields into CanonicalFields.
+// CanonicalizeFields normalizes all canonical fields into CanonicalFields.
 func CanonicalizeFields(raw map[string]any) (CanonicalFields, error) {
 	marksVal := raw["marks_json"]
 	if marksVal == nil {
@@ -248,6 +250,49 @@ func CanonicalizeFields(raw map[string]any) (CanonicalFields, error) {
 		return CanonicalFields{}, err
 	}
 
+	var docType *string
+	if dtRaw, ok := raw["document_type"]; ok && dtRaw != nil {
+		normDT := NormalizeString(dtRaw)
+		if normDT != nil && *normDT != "grade_sheet" {
+			docType = normDT
+		}
+	}
+
+	var normAttrs map[string]string
+	attrVal := raw["attributes"]
+	if attrVal == nil {
+		attrVal = raw["attributes_json"]
+	}
+	if attrVal != nil {
+		var rawMap map[string]any
+		switch m := attrVal.(type) {
+		case map[string]any:
+			rawMap = m
+		case map[string]string:
+			rawMap = make(map[string]any, len(m))
+			for k, v := range m {
+				rawMap[k] = v
+			}
+		case string:
+			if strings.TrimSpace(m) != "" && strings.TrimSpace(m) != "{}" {
+				_ = json.Unmarshal([]byte(m), &rawMap)
+			}
+		}
+		if len(rawMap) > 0 {
+			normAttrs = make(map[string]string)
+			for k, v := range rawMap {
+				kNorm := NormalizeString(k)
+				vNorm := NormalizeString(v)
+				if kNorm != nil && vNorm != nil {
+					normAttrs[*kNorm] = *vNorm
+				}
+			}
+			if len(normAttrs) == 0 {
+				normAttrs = nil
+			}
+		}
+	}
+
 	return CanonicalFields{
 		Name:           NormalizeString(raw["name"]),
 		RollNumber:     NormalizeString(raw["roll_number"]),
@@ -256,6 +301,8 @@ func CanonicalizeFields(raw map[string]any) (CanonicalFields, error) {
 		MarksJSON:      marks,
 		CGPA:           NormalizeNumeric(raw["cgpa"]),
 		IssueDate:      date,
+		DocumentType:   docType,
+		Attributes:     normAttrs,
 	}, nil
 }
 
