@@ -94,6 +94,11 @@ scale-test-azure:
 
 # Lint all code
 lint:
-	@echo "TODO: Configure linters (golangci-lint, ruff, eslint)"
+	@echo "=== Go formatting check ==="
+	python -c "import subprocess; result = subprocess.run(['gofmt', '-l', 'api'], capture_output=True, text=True); print(result.stdout, end='')"
+	@echo "=== Python syntax check ==="
+	python -m compileall -q worker functions shared/python
+	@echo "=== Frontend production build ==="
+	cd frontend && npm run build
 
 
