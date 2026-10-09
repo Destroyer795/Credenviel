@@ -80,6 +80,8 @@ export const IconCloudUpload = createIcon(
   </>
 )
 
+export const IconUpload = IconCloudUpload
+
 export const IconCheckCircle = createIcon(
   <>
     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />

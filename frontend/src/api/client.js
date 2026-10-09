@@ -90,11 +90,31 @@ export async function checkHealth() {
 }
 
 /**
+ * Infer standard MIME type from filename extension
+ */
+export function inferContentType(filename, providedType = '') {
+  const ext = (filename || '').split('.').pop()?.toLowerCase()
+  switch (ext) {
+    case 'pdf':
+      return 'application/pdf'
+    case 'png':
+      return 'image/png'
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    default:
+      return providedType || 'application/pdf'
+  }
+}
+
+/**
  * Create a new digitization job
  * POST /api/v1/jobs
  * Returns job ID, blob storage key, and temporary user-delegation SAS upload URL
  */
 export async function createJob({ filename, contentType, sizeBytes }, authState) {
+  const resolvedContentType = inferContentType(filename, contentType)
+
   const res = await fetchWithAuth(
     '/api/v1/jobs',
     {
@@ -102,7 +122,7 @@ export async function createJob({ filename, contentType, sizeBytes }, authState)
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filename,
-        content_type: contentType,
+        content_type: resolvedContentType,
         size_bytes: sizeBytes,
       }),
     },
@@ -127,8 +147,9 @@ export async function uploadFileToBlob(uploadUrl, file, onProgress = null, extra
   }
 
   const isAzureBlob = uploadUrl.includes('.blob.core.windows.net') || uploadUrl.includes('sig=')
+  const resolvedContentType = inferContentType(file.name, file.type)
   const headers = {
-    'Content-Type': file.type || 'application/pdf',
+    'Content-Type': resolvedContentType,
     ...(extraHeaders || {}),
   }
 

@@ -16,6 +16,7 @@ import {
   IconExternalLink,
   IconSearch,
   IconRefresh,
+  IconUpload,
 } from '../components/Icons'
 
 /**

@@ -36,7 +36,11 @@ export function IssuerPortal() {
     try {
       const data = await listJobs({}, auth)
       if (Array.isArray(data)) {
-        setJobs(data)
+        const enriched = data.map((j) => ({
+          ...j,
+          filename: j.filename || (j.blob_key ? j.blob_key.split('/').pop() : 'Academic Document'),
+        }))
+        setJobs(enriched)
       }
     } catch (err) {
       console.warn('Failed to fetch issuer jobs:', err)

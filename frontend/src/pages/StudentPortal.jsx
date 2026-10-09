@@ -37,7 +37,11 @@ export function StudentPortal() {
     try {
       const data = await listJobs({}, auth)
       if (Array.isArray(data)) {
-        setJobs(data)
+        const enriched = data.map((j) => ({
+          ...j,
+          filename: j.filename || (j.blob_key ? j.blob_key.split('/').pop() : 'Certificate'),
+        }))
+        setJobs(enriched)
       }
     } catch (err) {
       console.warn('Failed to fetch jobs:', err)
