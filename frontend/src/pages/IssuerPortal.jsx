@@ -121,13 +121,16 @@ export function IssuerPortal() {
     if (filterStatus === 'requires_review' || filterStatus === 'needs_review') {
       return j.status === 'requires_review' || j.status === 'needs_review'
     }
+    if (filterStatus === 'processing') {
+      return j.status === 'processing' || j.status === 'queued' || j.status === 'awaiting_upload'
+    }
     return j.status === filterStatus
   })
 
   const totalCount = jobs.length
   const reviewCount = jobs.filter((j) => j.status === 'requires_review' || j.status === 'needs_review').length
   const processedCount = jobs.filter((j) => j.status === 'processed').length
-  const processingCount = jobs.filter((j) => j.status === 'processing' || j.status === 'queued').length
+  const processingCount = jobs.filter((j) => j.status === 'processing' || j.status === 'queued' || j.status === 'awaiting_upload').length
 
   return (
     <div className="page-container">
