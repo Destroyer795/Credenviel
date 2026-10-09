@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { listJobs, createJob, uploadFileToBlob } from '../api/client'
+import { listJobs, createJob, uploadFileToBlob, getJobPublicIdMapping } from '../api/client'
 import { StatusBadge } from '../components/StatusBadge'
 import {
   IconBuilding,
@@ -452,13 +452,17 @@ export function IssuerPortal() {
                             </button>
                           ) : isProcessed ? (
                             <Link
-                              to={`/verify/${job.id}`}
+                              to={`/verify/${getJobPublicIdMapping(job.id) || job.id}`}
                               className="btn btn-success"
                               style={{ fontSize: '0.78rem', padding: '0.32rem 0.7rem' }}
                             >
                               <IconShield size={13} />
                               <span>View Proof & QR</span>
                             </Link>
+                          ) : job.status === 'awaiting_upload' ? (
+                            <span style={{ fontSize: '0.75rem', color: '#94A3B8', fontStyle: 'italic', padding: '0.32rem 0.5rem' }}>
+                              Upload Pending
+                            </span>
                           ) : (
                             <button
                               id={`btn-inspect-${job.id}`}
@@ -467,7 +471,7 @@ export function IssuerPortal() {
                               onClick={() => navigate(`/issuer/review?jobId=${job.id}`)}
                             >
                               <IconEye size={13} />
-                              <span>Inspect</span>
+                              <span>{job.status === 'failed' ? 'View Failure' : 'Inspect Status'}</span>
                             </button>
                           )}
                         </div>

@@ -47,8 +47,10 @@ class WorkerProcessor:
         before_finalize: Callable[[uuid.UUID], None] | None = None,
         after_record_upsert: Callable[[uuid.UUID], None] | None = None,
         extractor_fault: Callable[[uuid.UUID], None] | None = None,
+        database_url: str = "",
     ):
         self.conn = conn
+        self.database_url = database_url
         self.queue = queue
         self.store = store
         self.extractor = extractor
@@ -60,11 +62,38 @@ class WorkerProcessor:
         self.after_record_upsert = after_record_upsert
         self.extractor_fault = extractor_fault
 
+    def ensure_connection(self) -> psycopg.Connection:
+        """Verify the database connection is alive; reconnect automatically if closed or broken."""
+        needs_reconnect = False
+        if self.conn is None or getattr(self.conn, "closed", False):
+            needs_reconnect = True
+        else:
+            try:
+                with self.conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            except Exception:
+                logger.warning("Database connection is closed or broken; reconnecting...")
+                needs_reconnect = True
+                try:
+                    self.conn.close()
+                except Exception:
+                    pass
+
+        if needs_reconnect:
+            if not self.database_url:
+                logger.warning("No database_url provided to WorkerProcessor for reconnect")
+                return self.conn
+            logger.info("Reconnecting to PostgreSQL database...")
+            self.conn = psycopg.connect(self.database_url, autocommit=True)
+
+        return self.conn
+
     def process_message(self, message: Message) -> str:
         """Process a single queue message following docs/PHASE1_SPEC.md § 5.7.
 
         Returns the outcome action ("processed", "needs_review", "failed", "no_op", "abandoned").
         """
+        self.ensure_connection()
         # 1. Parse and validate message body
         body = message.body
         if not isinstance(body, dict) or "job_id" not in body:

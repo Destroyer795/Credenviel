@@ -25,8 +25,9 @@ export function VerificationPage() {
   const [copied, setCopied] = useState(false)
 
   const activeId = (id || '').trim()
-  const verifyUrl = typeof window !== 'undefined' && activeId
-    ? `${window.location.origin}/verify/${encodeURIComponent(activeId)}`
+  const canonicalId = certData?.public_verification_id || activeId
+  const verifyUrl = typeof window !== 'undefined' && canonicalId
+    ? `${window.location.origin}/verify/${encodeURIComponent(canonicalId)}`
     : `https://credenviel.ac.in/verify`
 
   useEffect(() => {

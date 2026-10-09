@@ -188,21 +188,93 @@ export async function listJobs(filter = {}, authState) {
 }
 
 /**
+ * Cache mapping of Job ID -> Public Verification ID
+ */
+export function saveJobPublicIdMapping(jobId, publicId) {
+  if (!jobId || !publicId) return
+  try {
+    const raw = localStorage.getItem('credenviel_job_mappings') || '{}'
+    const parsed = JSON.parse(raw)
+    parsed[jobId] = publicId
+    localStorage.setItem('credenviel_job_mappings', JSON.stringify(parsed))
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function getJobPublicIdMapping(jobId) {
+  if (!jobId) return null
+  try {
+    const raw = localStorage.getItem('credenviel_job_mappings') || '{}'
+    const parsed = JSON.parse(raw)
+    return parsed[jobId] || null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Public Verification lookup
  * GET /api/v1/verify/{id}
  */
 export async function getVerification(verificationId) {
+  // 1. Direct query against public verification endpoint
   const res = await fetch(`${API_BASE_URL}/api/v1/verify/${encodeURIComponent(verificationId)}`)
-  if (!res.ok) {
-    if (res.status === 429) {
-      throw new ApiError(429, 'Rate limit exceeded: maximum 30 requests per minute from this IP address.')
+  if (res.ok) {
+    const data = await res.json()
+    if (data.public_verification_id) {
+      saveJobPublicIdMapping(verificationId, data.public_verification_id)
     }
-    if (res.status === 404) {
-      throw new ApiError(404, 'No verified credential found matching this Public Verification ID.')
-    }
-    throw new ApiError(res.status, `Verification lookup failed (${res.status})`)
+    return data
   }
-  return await res.json()
+
+  if (res.status === 429) {
+    throw new ApiError(429, 'Rate limit exceeded: maximum 30 requests per minute from this IP address.')
+  }
+
+  // 2. If 404, check if verificationId is a Job ID that has a cached Public Verification ID
+  if (res.status === 404) {
+    const mappedPubId = getJobPublicIdMapping(verificationId)
+    if (mappedPubId && mappedPubId !== verificationId) {
+      const fallbackRes = await fetch(`${API_BASE_URL}/api/v1/verify/${encodeURIComponent(mappedPubId)}`)
+      if (fallbackRes.ok) {
+        return await fallbackRes.json()
+      }
+    }
+
+    // 3. Check if user is logged in as an issuer and can query review details
+    try {
+      const savedUser = localStorage.getItem('credenviel_user')
+      if (savedUser) {
+        const user = JSON.parse(savedUser)
+        if (user && user.role === 'issuer') {
+          // Attempt review details query to resolve public_verification_id
+          const revRes = await fetch(`${API_BASE_URL}/api/v1/review/${encodeURIComponent(verificationId)}`, {
+            headers: {
+              Authorization: `Bearer mock-${user.oid || 'examcell'}`
+            }
+          })
+          if (revRes.ok) {
+            const revData = await revRes.json()
+            const pubId = revData?.record?.public_verification_id
+            if (pubId) {
+              saveJobPublicIdMapping(verificationId, pubId)
+              const pubRes = await fetch(`${API_BASE_URL}/api/v1/verify/${encodeURIComponent(pubId)}`)
+              if (pubRes.ok) {
+                return await pubRes.json()
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Fall through to 404
+    }
+
+    throw new ApiError(404, 'No verified credential found matching this Public Verification ID or Job Reference.')
+  }
+
+  throw new ApiError(res.status, `Verification lookup failed (${res.status})`)
 }
 
 /**

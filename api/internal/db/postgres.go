@@ -235,7 +235,7 @@ func (d *DB) GetByPublicVerificationID(ctx context.Context, publicVerificationID
 		       source_hash, fields_hash, public_verification_id, verified_by_issuer,
 		       reviewed_by, reviewed_at, corrections_json, created_at
 		FROM records
-		WHERE public_verification_id = $1
+		WHERE public_verification_id = $1 OR job_id = $1
 	`
 
 	var r records.Record

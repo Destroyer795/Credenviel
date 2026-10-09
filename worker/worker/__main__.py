@@ -61,9 +61,11 @@ def run_worker_loop(
             logger.info("Processed message %s: outcome=%s", msg_id, outcome)
         except Exception as e:
             logger.exception("Error processing message: %s", e)
-            if hasattr(processor, "conn") and getattr(processor.conn, "closed", False):
-                logger.critical("Database connection was closed; terminating worker loop to trigger container restart")
-                raise
+            try:
+                if hasattr(processor, "ensure_connection"):
+                    processor.ensure_connection()
+            except Exception as reconn_err:
+                logger.error("Failed to reconnect to database: %s", reconn_err)
 
     return processed_count
 
@@ -150,6 +152,7 @@ def main() -> None:
             confidence_threshold=config["confidence_threshold"],
             api_internal_url=config["api_internal_url"],
             internal_api_key=config["internal_api_key"],
+            database_url=config["database_url"],
         )
 
         logger.info("Worker started, polling queue 'job-processing'...")

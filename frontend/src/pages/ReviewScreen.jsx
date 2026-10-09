@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { getReviewDetails, resolveReview, rejectReview, listReviewQueue } from '../api/client'
+import { getReviewDetails, resolveReview, rejectReview, listReviewQueue, saveJobPublicIdMapping } from '../api/client'
 import { QRCode } from '../components/QRCode'
 import {
   IconScale,
@@ -23,7 +23,7 @@ import {
  * Realistic Physical Document Scan Viewer
  * Used when inspecting physical paper scans, archive documents, or simulated test scans
  */
-function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1 }) {
+function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks = true }) {
   return (
     <div
       style={{
@@ -113,7 +113,7 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1 }) {
       </div>
 
       {/* Marks Table Scan */}
-      {formData.marks && formData.marks.length > 0 && (
+      {includeMarks && formData.marks && formData.marks.length > 0 && (
         <div style={{ margin: '1rem 0', border: '1px solid #BDB29F', background: '#F5EFE1', padding: '0.6rem', fontSize: '0.72rem' }}>
           <div style={{ fontWeight: 700, borderBottom: '1px solid #C8BDAB', paddingBottom: '0.2rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Official Ledger Grades Summary:
@@ -174,7 +174,7 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1 }) {
  * High-Density Digital Credential Extracted Preview
  * Embeds official digital certificate format, live form values, and verifiable QR code
  */
-function DigitalExtractedPreview({ formData, jobId, verifyUrl }) {
+function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = true }) {
   return (
     <div className="certificate-mock-view" style={{ maxWidth: '540px', margin: '0 auto', textAlign: 'center', background: '#FFFFFF', padding: '2.5rem 2rem', border: '8px double #CBD5E1', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
       {/* University Digital Seal */}
@@ -210,7 +210,7 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl }) {
       </div>
 
       {/* Extracted Course Marks */}
-      {formData.marks && formData.marks.length > 0 && (
+      {includeMarks && formData.marks && formData.marks.length > 0 && (
         <div style={{ textAlign: 'left', margin: '0.85rem 0', background: 'var(--bg-frost)', padding: '0.65rem 0.85rem', borderRadius: 6, fontSize: '0.72rem', color: '#334155' }}>
           <div style={{ fontWeight: 700, marginBottom: '0.3rem', color: 'var(--text-main)' }}>
             Verified Course Transcripts ({formData.marks.length} courses):
@@ -270,34 +270,25 @@ export function ReviewScreen() {
   const [rejectionReason, setRejectionReason] = useState('Illegible or corrupted document scan')
   const [activeViewerTab, setActiveViewerTab] = useState('scan') // 'scan' | 'preview' | 'split'
   const [zoomLevel, setZoomLevel] = useState(1)
+  const [includeMarks, setIncludeMarks] = useState(false)
+  const [publicVerificationId, setPublicVerificationId] = useState('')
 
-  // Form data for extracted record
+  // Form data for extracted record (defaults to empty so real documents are not masked)
   const [formData, setFormData] = useState({
-    name: 'Alice Chen',
-    roll_number: '2021-CS-0428',
-    register_number: 'REG-987654',
-    degree: 'Bachelor of Science in Computer Science & Engineering',
-    cgpa: '3.91',
-    issue_date: '2025-05-15',
-    marks: [
-      { code: 'CS101', name: 'Intro to Programming', credits: '4', grade: 'A+', grade_points: '10' },
-      { code: 'CS201', name: 'Data Structures', credits: '4', grade: 'A', grade_points: '9' },
-      { code: 'CS301', name: 'Computer Networks', credits: '3', grade: 'B+', grade_points: '7' },
-    ],
-    reviewerNotes: 'Verified against university registrar ledger. Seal and signatures authenticated.',
+    name: '',
+    roll_number: '',
+    register_number: '',
+    degree: '',
+    cgpa: '',
+    issue_date: '',
+    marks: [],
+    reviewerNotes: 'Verified against university registrar ledger. Signatures authenticated.',
   })
 
   // Confidence indicators per field
   const [confidences, setConfidences] = useState({
     threshold: 0.85,
-    fields: {
-      name: 0.98,
-      roll_number: 0.72, // Flagged below 0.85
-      register_number: 0.95,
-      degree: 0.96,
-      cgpa: 0.79, // Flagged below 0.85
-      issue_date: 0.93,
-    },
+    fields: {},
     marks: {},
   })
 
@@ -338,6 +329,14 @@ export function ReviewScreen() {
 
         if (data?.record) {
           const rec = data.record
+          if (rec.public_verification_id) {
+            setPublicVerificationId(rec.public_verification_id)
+            saveJobPublicIdMapping(targetId, rec.public_verification_id)
+          }
+
+          const hasMarks = Array.isArray(rec.marks_json) && rec.marks_json.length > 0
+          setIncludeMarks(hasMarks)
+
           setFormData({
             name: rec.name || '',
             roll_number: rec.roll_number || '',
@@ -345,17 +344,35 @@ export function ReviewScreen() {
             degree: rec.degree || '',
             cgpa: rec.cgpa || '',
             issue_date: rec.issue_date || '',
-            marks: Array.isArray(rec.marks_json) ? rec.marks_json : [],
-            reviewerNotes: 'Verified against university registrar ledger. Signatures authenticated.',
+            marks: hasMarks ? rec.marks_json : [],
+            reviewerNotes: rec.corrections_json?.notes || 'Verified against university registrar ledger. Signatures authenticated.',
           })
 
           if (rec.confidence_json?.fields) {
             setConfidences({
-              threshold: 0.85,
+              threshold: rec.confidence_json.threshold || 0.85,
               fields: rec.confidence_json.fields,
               marks: rec.confidence_json.marks || {},
             })
           }
+        } else {
+          // If no record exists yet (e.g. queued, awaiting_upload, or failed)
+          setIncludeMarks(false)
+          setFormData({
+            name: '',
+            roll_number: '',
+            register_number: '',
+            degree: '',
+            cgpa: '',
+            issue_date: '',
+            marks: [],
+            reviewerNotes: '',
+          })
+          setConfidences({
+            threshold: 0.85,
+            fields: {},
+            marks: {},
+          })
         }
       })
       .catch((err) => {
@@ -399,6 +416,11 @@ export function ReviewScreen() {
   }
 
   const handleApprove = async () => {
+    if (jobMeta?.status !== 'needs_review') {
+      alert(`Approval disabled: this job is currently in "${jobMeta?.status || 'unknown'}" status. Only documents in "needs_review" status require manual human approval.`)
+      return
+    }
+
     setSaving(true)
     try {
       const payload = {
@@ -408,12 +430,16 @@ export function ReviewScreen() {
         degree: formData.degree,
         cgpa: formData.cgpa,
         issue_date: formData.issue_date,
-        marks_json: formData.marks,
+        marks_json: includeMarks ? formData.marks : [],
         reviewer_notes: formData.reviewerNotes,
       }
 
       const res = await resolveReview(currentJobId, payload, auth)
       setResolvedResult(res)
+      if (res?.public_verification_id) {
+        setPublicVerificationId(res.public_verification_id)
+        saveJobPublicIdMapping(currentJobId, res.public_verification_id)
+      }
       setActionDone('approved')
     } catch (err) {
       console.error('Failed to approve review:', err)
@@ -424,6 +450,11 @@ export function ReviewScreen() {
   }
 
   const handleConfirmReject = async () => {
+    if (jobMeta?.status !== 'needs_review') {
+      alert(`Rejection disabled: this job is currently in "${jobMeta?.status || 'unknown'}" status.`)
+      return
+    }
+
     setSaving(true)
     try {
       await rejectReview(currentJobId, rejectionReason, auth)
@@ -442,9 +473,10 @@ export function ReviewScreen() {
     (/\.(png|jpe?g|webp|gif)($|\?)/i.test(readSasUrl) ||
       (jobMeta?.filename && /\.(png|jpe?g|webp|gif)$/i.test(jobMeta.filename)))
 
-  const verifyUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/verify/${currentJobId}`
-    : `https://credenviel.ac.in/verify/${currentJobId}`
+  const targetVerifyId = publicVerificationId || currentJobId
+  const verifyUrl = typeof window !== 'undefined' && targetVerifyId
+    ? `${window.location.origin}/verify/${encodeURIComponent(targetVerifyId)}`
+    : `https://credenviel.ac.in/verify/${encodeURIComponent(targetVerifyId || '')}`
 
   return (
     <div className="page-container">
@@ -513,7 +545,7 @@ export function ReviewScreen() {
           )}
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <Link to={`/verify/${currentJobId}`} className="btn btn-success" id="btn-view-issued-proof">
+            <Link to={`/verify/${publicVerificationId || currentJobId}`} className="btn btn-success" id="btn-view-issued-proof">
               <IconShield size={16} />
               <span>View Public Verification Certificate</span>
             </Link>
@@ -557,7 +589,69 @@ export function ReviewScreen() {
           </Link>
         </div>
       ) : (
-        <div className="review-grid">
+        <>
+          {jobMeta && jobMeta.status !== 'needs_review' && (
+            <div style={{
+              marginBottom: '1.25rem',
+              padding: '1rem 1.25rem',
+              borderRadius: 8,
+              border: jobMeta.status === 'processed' ? '1px solid #86EFAC' : jobMeta.status === 'failed' ? '1px solid #FDA4AF' : '1px solid #FCD34D',
+              background: jobMeta.status === 'processed' ? '#F0FDF4' : jobMeta.status === 'failed' ? '#FFF1F2' : '#FFFBEB',
+              color: jobMeta.status === 'processed' ? '#166534' : jobMeta.status === 'failed' ? '#9F1239' : '#92400E',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                {jobMeta.status === 'processed' ? <IconCheck size={22} color="#166534" /> : <IconAlertTriangle size={22} />}
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>
+                    Document Status: {jobMeta.status.toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: '0.82rem', marginTop: '0.2rem', lineHeight: 1.4 }}>
+                    {jobMeta.status === 'processed' && 'This credential has already been processed, cryptographically hashed, and issued in the registry. It does not require manual review.'}
+                    {jobMeta.status === 'queued' && 'This document is in the Azure Service Bus processing queue. OCR extraction and confidence scoring are pending worker pickup.'}
+                    {jobMeta.status === 'processing' && 'The worker is currently running OCR extraction, tamper detection, and confidence scoring. Please wait a moment.'}
+                    {jobMeta.status === 'awaiting_upload' && 'This job was created but the document scan file was not received by Azure Blob Storage.'}
+                    {jobMeta.status === 'failed' && `Processing failed: ${jobMeta.failure_reason || 'Rejected or unreadable scan'}`}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                {jobMeta.status === 'processed' && (
+                  <Link to={`/verify/${publicVerificationId || currentJobId}`} className="btn btn-success" style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}>
+                    <IconShield size={14} />
+                    <span>View Public Verification Proof & QR</span>
+                  </Link>
+                )}
+                {(jobMeta.status === 'queued' || jobMeta.status === 'processing') && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}
+                    onClick={() => {
+                      setLoading(true)
+                      getReviewDetails(currentJobId, auth).then(d => {
+                        if (d?.job) setJobMeta(d.job)
+                        if (d?.record?.public_verification_id) {
+                          setPublicVerificationId(d.record.public_verification_id)
+                          saveJobPublicIdMapping(currentJobId, d.record.public_verification_id)
+                        }
+                      }).finally(() => setLoading(false))
+                    }}
+                  >
+                    <IconRefresh size={14} />
+                    <span>Refresh Status</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="review-grid">
           {/* Left Pane: Document Scan & Extracted Preview */}
           <div className="glass-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* Viewer Controls Bar */}
@@ -689,7 +783,7 @@ export function ReviewScreen() {
               )}
 
               {activeViewerTab === 'preview' && (
-                <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} />
+                <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} includeMarks={includeMarks} />
               )}
 
               {activeViewerTab === 'split' && (
@@ -701,7 +795,7 @@ export function ReviewScreen() {
                     {readSasUrl && isImageBlob ? (
                       <img src={readSasUrl} alt="Scan" style={{ width: '100%', borderRadius: 6 }} />
                     ) : (
-                      <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={0.9} />
+                      <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={0.9} includeMarks={includeMarks} />
                     )}
                   </div>
 
@@ -709,7 +803,7 @@ export function ReviewScreen() {
                     <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '0.5rem', textAlign: 'center' }}>
                       DIGITAL EXTRACTED CREDENTIAL
                     </div>
-                    <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} />
+                    <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} includeMarks={includeMarks} />
                   </div>
                 </div>
               )}
@@ -853,94 +947,135 @@ export function ReviewScreen() {
               </div>
             </div>
 
-            {/* Tabular Marks Section */}
-            <div className="form-group" style={{ marginTop: '0.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <label className="form-label" style={{ marginBottom: 0 }}>
-                  <span>Tabular Transcript Marks ({formData.marks.length} courses)</span>
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                  onClick={handleAddMarkRow}
-                >
-                  + Add Course
-                </button>
-              </div>
-
-              {formData.marks.length > 0 && (
-                <div style={{ overflowX: 'auto', maxHeight: '180px', overflowY: 'auto' }}>
-                  <table className="marks-editor-table">
-                    <thead>
-                      <tr>
-                        <th>Code</th>
-                        <th>Course Title</th>
-                        <th style={{ width: '60px' }}>Credits</th>
-                        <th style={{ width: '60px' }}>Grade</th>
-                        <th style={{ width: '60px' }}>Points</th>
-                        <th style={{ width: '30px' }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {formData.marks.map((m, idx) => (
-                        <tr key={idx}>
-                          <td>
-                            <input
-                              className="marks-cell-input"
-                              value={m.code || ''}
-                              placeholder="CS101"
-                              onChange={(e) => handleMarksChange(idx, 'code', e.target.value)}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              className="marks-cell-input"
-                              value={m.name || ''}
-                              placeholder="Course Name"
-                              onChange={(e) => handleMarksChange(idx, 'name', e.target.value)}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              className="marks-cell-input"
-                              value={m.credits || ''}
-                              placeholder="4"
-                              onChange={(e) => handleMarksChange(idx, 'credits', e.target.value)}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              className="marks-cell-input"
-                              value={m.grade || ''}
-                              placeholder="A"
-                              onChange={(e) => handleMarksChange(idx, 'grade', e.target.value)}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              className="marks-cell-input"
-                              value={m.grade_points || ''}
-                              placeholder="9"
-                              onChange={(e) => handleMarksChange(idx, 'grade_points', e.target.value)}
-                            />
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMarkRow(idx)}
-                              style={{ background: 'transparent', border: 'none', color: 'var(--status-rose)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
-                            >
-                              <IconX size={12} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* Tabular Marks Section Toggle */}
+            <div style={{
+              marginTop: '1rem',
+              marginBottom: '0.75rem',
+              padding: '0.75rem 1rem',
+              background: 'var(--bg-frost)',
+              borderRadius: 8,
+              border: '1px solid var(--border-subtle)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '0.75rem'
+            }}>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  Tabular Transcript Marks Breakdown
                 </div>
-              )}
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-sub)' }}>
+                  Include for semester marksheets & transcripts. Uncheck for degree certificates & diplomas.
+                </div>
+              </div>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={includeMarks}
+                  onChange={(e) => setIncludeMarks(e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: 'pointer' }}
+                />
+                <span>{includeMarks ? 'Included' : 'Omitted'}</span>
+              </label>
             </div>
+
+            {includeMarks ? (
+              <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>
+                    <span>Verified Course Records ({formData.marks.length} courses)</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                    onClick={handleAddMarkRow}
+                  >
+                    + Add Course
+                  </button>
+                </div>
+
+                {formData.marks.length > 0 ? (
+                  <div style={{ overflowX: 'auto', maxHeight: '180px', overflowY: 'auto' }}>
+                    <table className="marks-editor-table">
+                      <thead>
+                        <tr>
+                          <th>Code</th>
+                          <th>Course Title</th>
+                          <th style={{ width: '60px' }}>Credits</th>
+                          <th style={{ width: '60px' }}>Grade</th>
+                          <th style={{ width: '60px' }}>Points</th>
+                          <th style={{ width: '30px' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {formData.marks.map((m, idx) => (
+                          <tr key={idx}>
+                            <td>
+                              <input
+                                className="marks-cell-input"
+                                value={m.code || ''}
+                                placeholder="CS101"
+                                onChange={(e) => handleMarksChange(idx, 'code', e.target.value)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="marks-cell-input"
+                                value={m.name || ''}
+                                placeholder="Course Name"
+                                onChange={(e) => handleMarksChange(idx, 'name', e.target.value)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="marks-cell-input"
+                                value={m.credits || ''}
+                                placeholder="4"
+                                onChange={(e) => handleMarksChange(idx, 'credits', e.target.value)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="marks-cell-input"
+                                value={m.grade || ''}
+                                placeholder="A"
+                                onChange={(e) => handleMarksChange(idx, 'grade', e.target.value)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="marks-cell-input"
+                                value={m.grade_points || ''}
+                                placeholder="9"
+                                onChange={(e) => handleMarksChange(idx, 'grade_points', e.target.value)}
+                              />
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveMarkRow(idx)}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--status-rose)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}
+                              >
+                                <IconX size={12} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ padding: '0.6rem 0.85rem', background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 6, fontSize: '0.75rem', color: '#64748B' }}>
+                    No courses added yet. Click &quot;+ Add Course&quot; to add transcript line items.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: '0.65rem 0.85rem', background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 6, fontSize: '0.75rem', color: '#64748B', marginBottom: '1rem', lineHeight: 1.5 }}>
+                ℹ️ <strong>Degree / Diploma Mode:</strong> Tabular course marks are omitted. The tamper-evident proof seals the candidate name, degree conferral, CGPA, and registrar authentication.
+              </div>
+            )}
 
             {/* Reviewer Notes */}
             <div className="form-group">
@@ -958,29 +1093,57 @@ export function ReviewScreen() {
 
             {/* Human-in-the-loop decision actions */}
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.75rem', flexWrap: 'wrap' }}>
-              <button
-                id="btn-approve-credential"
-                className="btn btn-success"
-                style={{ flex: 1 }}
-                disabled={saving || loading}
-                onClick={handleApprove}
-              >
-                <IconCheck size={16} />
-                <span>{saving ? 'Sealing & Anchoring Proof...' : 'Approve & Issue Certificate'}</span>
-              </button>
-              <button
-                id="btn-reject-credential"
-                className="btn btn-danger"
-                disabled={saving || loading}
-                onClick={() => setShowRejectModal(true)}
-              >
-                <IconX size={16} />
-                <span>Reject</span>
-              </button>
+              {jobMeta?.status === 'needs_review' ? (
+                <>
+                  <button
+                    id="btn-approve-credential"
+                    className="btn btn-success"
+                    style={{ flex: 1 }}
+                    disabled={saving || loading}
+                    onClick={handleApprove}
+                  >
+                    <IconCheck size={16} />
+                    <span>{saving ? 'Sealing & Anchoring Proof...' : 'Approve & Issue Certificate'}</span>
+                  </button>
+                  <button
+                    id="btn-reject-credential"
+                    className="btn btn-danger"
+                    disabled={saving || loading}
+                    onClick={() => setShowRejectModal(true)}
+                  >
+                    <IconX size={16} />
+                    <span>Reject</span>
+                  </button>
+                </>
+              ) : jobMeta?.status === 'processed' ? (
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <Link
+                    to={`/verify/${publicVerificationId || currentJobId}`}
+                    className="btn btn-success"
+                    style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
+                  >
+                    <IconShield size={16} />
+                    <span>View Public Verification Certificate & QR</span>
+                  </Link>
+                  <div style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-sub)' }}>
+                    This document was already verified and issued. No further approval required.
+                  </div>
+                </div>
+              ) : (
+                <div style={{ width: '100%', padding: '0.85rem 1rem', background: '#F8FAFC', border: '1px solid var(--border-subtle)', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-sub)', marginBottom: '0.4rem' }}>
+                    Approval disabled: Job status is <code>{jobMeta?.status || 'unknown'}</code>.
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>
+                    Only jobs in <strong>needs_review</strong> status require human approval.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      )}
+      </>
+    )}
 
       {/* Reject Reason Modal */}
       {showRejectModal && (
