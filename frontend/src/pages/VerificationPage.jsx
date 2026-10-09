@@ -7,7 +7,7 @@ import {
   IconAlertTriangle,
   IconXCircle,
   IconCheck,
-  IconDownload,
+  IconExternalLink,
   IconCopy,
   IconPrinter,
   IconSearch,
