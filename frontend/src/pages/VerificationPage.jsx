@@ -153,109 +153,159 @@ export function VerificationPage() {
       ) : certData ? (
         <div className="verify-card" id="verification-card">
           {/* Header Verified Banner with QR Code layout */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'center', marginBottom: '2rem' }}>
-            <div className="verify-header-badge" id="verification-status-banner" style={{ margin: 0 }}>
-              <div className="verify-check-icon">
-                <IconCheck size={24} color="#ffffff" />
-              </div>
-              <div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--status-emerald-text)', letterSpacing: '-0.02em' }}>
-                  AUTHENTIC & VERIFIED CREDENTIAL
+          {(() => {
+            const docType = certData?.document_type || 'grade_sheet'
+            const isTC = docType === 'transfer_certificate'
+            const isBonafide = docType === 'bonafide_certificate'
+            const isConduct = docType === 'conduct_certificate'
+            const isDegree = docType === 'degree_certificate'
+            const isGradeSheet = docType === 'grade_sheet'
+
+            const bannerTitle = isTC
+              ? 'AUTHENTIC & VERIFIED TRANSFER CERTIFICATE'
+              : isBonafide
+              ? 'AUTHENTIC & VERIFIED BONAFIDE CERTIFICATE'
+              : isConduct
+              ? 'AUTHENTIC & VERIFIED CONDUCT CERTIFICATE'
+              : isDegree
+              ? 'AUTHENTIC & VERIFIED DEGREE CERTIFICATE'
+              : isGradeSheet
+              ? 'AUTHENTIC & VERIFIED GRADE SHEET'
+              : 'AUTHENTIC & VERIFIED CREDENTIAL'
+
+            return (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'center', marginBottom: '2rem' }}>
+                  <div className="verify-header-badge" id="verification-status-banner" style={{ margin: 0 }}>
+                    <div className="verify-check-icon">
+                      <IconCheck size={24} color="#ffffff" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--status-emerald-text)', letterSpacing: '-0.02em' }}>
+                        {bannerTitle}
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)' }}>
+                        {certData.verified_by_issuer
+                          ? 'Cryptographically authenticated and confirmed by accredited university authority.'
+                          : 'Document digitized with tamper-evident SHA-256 seal.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Visual QR Code Box */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '1.25rem',
+                      background: '#FFFFFF',
+                      padding: '1rem 1.25rem',
+                      borderRadius: 12,
+                      border: '1px solid var(--border-subtle)',
+                      boxShadow: '0 2px 8px rgba(37, 43, 50, 0.04)',
+                    }}
+                  >
+                    <QRCode value={verifyUrl} size={100} />
+                    <div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                        Mobile QR Verification
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', fontWeight: 600, marginTop: '0.2rem' }}>
+                        Scan to Inspect Proof
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                        Instantly load cryptographic proof on any mobile device.
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)' }}>
-                  {certData.verified_by_issuer
-                    ? 'Cryptographically authenticated and confirmed by accredited university authority.'
-                    : 'Document digitized with tamper-evident SHA-256 seal.'}
+
+                {/* Credential Metadata */}
+                <div className="meta-grid">
+                  <div>
+                    <div className="meta-field-label">Student Recipient</div>
+                    <div className="meta-field-value" id="verify-recipient-name">
+                      {certData.name || certData.student_name}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="meta-field-label">Roll Number</div>
+                    <div className="meta-field-value" id="verify-roll-number">
+                      {certData.roll_number || 'Official Ledger ID'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="meta-field-label">
+                      {isTC ? 'Course / Class' : isBonafide ? 'Branch / Program' : 'Degree / Qualification'}
+                    </div>
+                    <div className="meta-field-value" id="verify-degree-title">
+                      {certData.degree || certData.degree_title || (isTC ? 'Undergraduate Studies' : 'N/A')}
+                    </div>
+                  </div>
+
+                  {!isTC && !isBonafide && !isConduct && certData.cgpa && (
+                    <div>
+                      <div className="meta-field-label">Cumulative GPA / Grade</div>
+                      <div className="meta-field-value" id="verify-cgpa">
+                        {certData.cgpa}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="meta-field-label">Issuing Authority</div>
+                    <div className="meta-field-value" id="verify-institution">
+                      {certData.institution || 'National Institute of Technology'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="meta-field-label">Conferral / Issue Date</div>
+                    <div className="meta-field-value" id="verify-grad-date">
+                      {certData.issue_date || certData.graduation_date}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="meta-field-label">Institutional Verification</div>
+                    <div className="meta-field-value" style={{ color: certData.verified_by_issuer ? 'var(--status-emerald-text)' : 'var(--status-amber-text)' }}>
+                      {certData.verified_by_issuer ? 'Confirmed by University Registrar' : 'Pending Registrar Review'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="meta-field-label">Tamper-Proof Audit Status</div>
+                    <div className="meta-field-value" style={{ color: 'var(--status-emerald-text)' }}>
+                      {certData.tamper_status || 'VALID_UNALTERED'}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Visual QR Code Box */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1.25rem',
-                background: '#FFFFFF',
-                padding: '1rem 1.25rem',
-                borderRadius: 12,
-                border: '1px solid var(--border-subtle)',
-                boxShadow: '0 2px 8px rgba(37, 43, 50, 0.04)',
-              }}
-            >
-              <QRCode value={verifyUrl} size={100} />
-              <div>
-                <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
-                  Mobile QR Verification
-                </div>
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', fontWeight: 600, marginTop: '0.2rem' }}>
-                  Scan to Inspect Proof
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                  Instantly load cryptographic proof on any mobile device.
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Credential Metadata */}
-          <div className="meta-grid">
-            <div>
-              <div className="meta-field-label">Student Recipient</div>
-              <div className="meta-field-value" id="verify-recipient-name">
-                {certData.name || certData.student_name}
-              </div>
-            </div>
-
-            <div>
-              <div className="meta-field-label">Roll Number</div>
-              <div className="meta-field-value" id="verify-roll-number">
-                {certData.roll_number || 'Official Ledger ID'}
-              </div>
-            </div>
-
-            <div>
-              <div className="meta-field-label">Degree / Qualification</div>
-              <div className="meta-field-value" id="verify-degree-title">
-                {certData.degree || certData.degree_title}
-              </div>
-            </div>
-
-            <div>
-              <div className="meta-field-label">Cumulative GPA / Grade</div>
-              <div className="meta-field-value" id="verify-cgpa">
-                {certData.cgpa || 'N/A'}
-              </div>
-            </div>
-
-            <div>
-              <div className="meta-field-label">Issuing Authority</div>
-              <div className="meta-field-value" id="verify-institution">
-                {certData.institution || 'National Institute of Technology'}
-              </div>
-            </div>
-
-            <div>
-              <div className="meta-field-label">Conferral / Issue Date</div>
-              <div className="meta-field-value" id="verify-grad-date">
-                {certData.issue_date || certData.graduation_date}
-              </div>
-            </div>
-
-            <div>
-              <div className="meta-field-label">Institutional Verification</div>
-              <div className="meta-field-value" style={{ color: certData.verified_by_issuer ? 'var(--status-emerald-text)' : 'var(--status-amber-text)' }}>
-                {certData.verified_by_issuer ? 'Confirmed by University Registrar' : 'Pending Registrar Review'}
-              </div>
-            </div>
-
-            <div>
-              <div className="meta-field-label">Tamper-Proof Audit Status</div>
-              <div className="meta-field-value" style={{ color: 'var(--status-emerald-text)' }}>
-                {certData.tamper_status || 'VALID_UNALTERED'}
-              </div>
-            </div>
-          </div>
+                {/* Flexible Attributes Grid */}
+                {certData.attributes_json && typeof certData.attributes_json === 'object' && Object.keys(certData.attributes_json).length > 0 && (
+                  <div style={{ marginTop: '1.5rem', marginBottom: '1.5rem', background: '#F8FAFC', padding: '1.25rem', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-main)' }}>
+                      Institutional Record Attributes
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                      {Object.entries(certData.attributes_json).map(([k, v]) => (
+                        <div key={k} style={{ background: '#FFFFFF', padding: '0.6rem 0.85rem', borderRadius: 6, border: '1px solid #E2E8F0' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600, textTransform: 'capitalize' }}>
+                            {k.replace(/_/g, ' ')}
+                          </div>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0F172A', marginTop: '0.15rem' }}>
+                            {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          })()}
 
           {/* Cryptographic Proof Details */}
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1.5rem', marginBottom: '1.75rem' }}>

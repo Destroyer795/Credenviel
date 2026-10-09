@@ -20,10 +20,38 @@ import {
 } from '../components/Icons'
 
 /**
- * Realistic Physical Document Scan Viewer
- * Used when inspecting physical paper scans, archive documents, or simulated test scans
+ * Document Type display names
  */
-function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks = true }) {
+const DOCUMENT_TYPE_LABELS = {
+  grade_sheet: 'Semester Grade Sheet / Transcript',
+  degree_certificate: 'Degree Certificate / Diploma',
+  transfer_certificate: 'Transfer Certificate (TC)',
+  bonafide_certificate: 'Bonafide Certificate',
+  conduct_certificate: 'Conduct & Character Certificate',
+  custom: 'Other Student Document',
+}
+
+/**
+ * Realistic Physical Document Scan Viewer
+ * Adapts to Grade Sheets, Degree Diplomas, Transfer Certificates, and Bonafide Certificates
+ */
+function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks = true, documentType = 'grade_sheet', attributes = [] }) {
+  const attrMap = {}
+  if (Array.isArray(attributes)) {
+    attributes.forEach((a) => {
+      if (a.key) {
+        attrMap[a.key.toLowerCase().trim().replace(/[^a-z0-9]/g, '_')] = a.value
+        attrMap[a.key.trim()] = a.value
+      }
+    })
+  }
+
+  const isTC = documentType === 'transfer_certificate'
+  const isBonafide = documentType === 'bonafide_certificate'
+  const isConduct = documentType === 'conduct_certificate'
+  const isDegree = documentType === 'degree_certificate'
+  const isGradeSheet = documentType === 'grade_sheet'
+
   return (
     <div
       style={{
@@ -60,7 +88,7 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
           borderRadius: 3,
         }}
       >
-        EXAM CELL ARCHIVE
+        {isTC ? 'TRANSFER RECORD ARCHIVE' : isBonafide ? 'BONAFIDE ARCHIVE' : isConduct ? 'CONDUCT ARCHIVE' : 'EXAM CELL ARCHIVE'}
       </div>
 
       {/* University Header */}
@@ -72,13 +100,16 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
           NATIONAL INSTITUTE OF TECHNOLOGY
         </div>
         <div style={{ fontSize: '0.75rem', fontStyle: 'italic', color: '#685F51' }}>
-          Office of the Registrar & Controller of Examinations
+          {isTC ? 'Office of Academic Affairs • Student Transfer Cell' : 'Office of the Registrar & Controller of Examinations'}
+        </div>
+        <div style={{ marginTop: '0.35rem', fontWeight: 800, fontSize: '0.88rem', letterSpacing: '0.08em', color: '#881337', textTransform: 'uppercase' }}>
+          {isTC ? 'TRANSFER CERTIFICATE' : isBonafide ? 'BONAFIDE CERTIFICATE' : isConduct ? 'CONDUCT & CHARACTER CERTIFICATE' : isDegree ? 'DEGREE CERTIFICATE' : 'GRADE REPORT & TRANSCRIPT'}
         </div>
       </div>
 
       {/* Certificate Body */}
       <div style={{ fontSize: '0.82rem', lineHeight: 1.6, textAlign: 'center', marginBottom: '1rem' }}>
-        <p style={{ margin: '0 0 0.5rem 0' }}>This is to certify that the candidate</p>
+        <p style={{ margin: '0 0 0.5rem 0' }}>This is to certify that</p>
         <div
           style={{
             fontSize: '1.2rem',
@@ -91,28 +122,73 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
         >
           {formData.name || 'Candidate Name'}
         </div>
-        <p style={{ margin: '0 0 0.35rem 0' }}>bearing Roll No. <strong>{formData.roll_number || '2021-CS-0428'}</strong> and Reg No. <strong>{formData.register_number || 'REG-987654'}</strong></p>
-        <p style={{ margin: '0 0 0.5rem 0' }}>has fulfilled all curriculum requirements for the award of</p>
-        <div
-          style={{
-            fontSize: '1rem',
-            fontWeight: 700,
-            fontFamily: 'serif',
-            color: '#1F2937',
-            background: 'rgba(230, 220, 195, 0.4)',
-            padding: '0.3rem 0.5rem',
-            margin: '0.4rem 0',
-            borderRadius: 2,
-          }}
-        >
-          {formData.degree || 'Bachelor of Science in Computer Science & Engineering'}
-        </div>
-        <p style={{ margin: '0.5rem 0' }}>
-          Cumulative Grade Point Average (CGPA): <strong>{formData.cgpa || '3.91'}</strong>
+        <p style={{ margin: '0 0 0.35rem 0' }}>
+          bearing Roll No. <strong>{formData.roll_number || '2021-CS-0428'}</strong> and Reg No. <strong>{formData.register_number || 'REG-987654'}</strong>
         </p>
+
+        {isTC ? (
+          <div style={{ textAlign: 'left', margin: '1rem 0', background: 'rgba(230, 220, 195, 0.4)', padding: '0.85rem', border: '1px solid #D2C7B6', borderRadius: 3 }}>
+            <div style={{ marginBottom: '0.35rem' }}>
+              <strong>Course / Class:</strong> {formData.degree || 'B.Tech in Computer Science & Engineering'}
+            </div>
+            <div style={{ marginBottom: '0.35rem' }}>
+              <strong>Father&apos;s Name:</strong> {attrMap.father_name || attrMap.father_s_name || attrMap["Father's Name"] || 'Robert Doe'}
+            </div>
+            <div style={{ marginBottom: '0.35rem' }}>
+              <strong>Date of Admission:</strong> {attrMap.date_of_admission || attrMap["Date of Admission"] || '2022-08-01'}
+            </div>
+            <div style={{ marginBottom: '0.35rem' }}>
+              <strong>Date of Leaving:</strong> {attrMap.date_of_leaving || attrMap["Date of Leaving"] || '2026-05-30'}
+            </div>
+            <div style={{ marginBottom: '0.35rem' }}>
+              <strong>Conduct &amp; Character:</strong> <strong>{attrMap.conduct || attrMap.character || attrMap["Conduct"] || 'Good'}</strong>
+            </div>
+            <div>
+              <strong>Reason for Leaving:</strong> {attrMap.reason_for_leaving || attrMap["Reason for Leaving"] || 'Course Completed'}
+            </div>
+          </div>
+        ) : isBonafide ? (
+          <div style={{ margin: '0.75rem 0', textAlign: 'left', background: 'rgba(230, 220, 195, 0.35)', padding: '0.75rem', border: '1px solid #D2C7B6', borderRadius: 3 }}>
+            <p style={{ margin: '0 0 0.4rem 0' }}>
+              is a bonafide student of this Institute pursuing <strong>{formData.degree || 'B.Tech Program'}</strong>.
+            </p>
+            {attrMap.academic_year && <div><strong>Academic Year:</strong> {attrMap.academic_year}</div>}
+            {attrMap.purpose && <div><strong>Purpose:</strong> {attrMap.purpose}</div>}
+          </div>
+        ) : isConduct ? (
+          <div style={{ margin: '0.75rem 0', textAlign: 'left', background: 'rgba(230, 220, 195, 0.35)', padding: '0.75rem', border: '1px solid #D2C7B6', borderRadius: 3 }}>
+            <p style={{ margin: '0 0 0.4rem 0' }}>
+              has completed the program of <strong>{formData.degree || 'Undergraduate Study'}</strong>.
+            </p>
+            <div><strong>Conduct &amp; Character:</strong> <strong>{attrMap.conduct || 'Exemplary'}</strong></div>
+          </div>
+        ) : (
+          <>
+            <p style={{ margin: '0 0 0.5rem 0' }}>has fulfilled all curriculum requirements for the award of</p>
+            <div
+              style={{
+                fontSize: '1rem',
+                fontWeight: 700,
+                fontFamily: 'serif',
+                color: '#1F2937',
+                background: 'rgba(230, 220, 195, 0.4)',
+                padding: '0.3rem 0.5rem',
+                margin: '0.4rem 0',
+                borderRadius: 2,
+              }}
+            >
+              {formData.degree || 'Bachelor of Science in Computer Science & Engineering'}
+            </div>
+            {formData.cgpa && (
+              <p style={{ margin: '0.5rem 0' }}>
+                Cumulative Grade Point Average (CGPA): <strong>{formData.cgpa}</strong>
+              </p>
+            )}
+          </>
+        )}
       </div>
 
-      {/* Marks Table Scan */}
+      {/* Marks Table Scan (Grade sheets only) */}
       {includeMarks && formData.marks && formData.marks.length > 0 && (
         <div style={{ margin: '1rem 0', border: '1px solid #BDB29F', background: '#F5EFE1', padding: '0.6rem', fontSize: '0.72rem' }}>
           <div style={{ fontWeight: 700, borderBottom: '1px solid #C8BDAB', paddingBottom: '0.2rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -122,6 +198,19 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.15rem 0', borderBottom: i < formData.marks.length - 1 ? '1px dotted #D2C7B6' : 'none' }}>
               <span>{m.code || `SUBJ-${i + 1}`} - {m.name}</span>
               <span>Credits: {m.credits || '4'} | <strong>Grade: {m.grade || 'A'}</strong></span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Custom Attributes on Scan */}
+      {!isTC && attributes.length > 0 && (
+        <div style={{ margin: '0.75rem 0', padding: '0.5rem', background: '#F5EFE1', border: '1px dotted #BDB29F', fontSize: '0.7rem', textAlign: 'left' }}>
+          <div style={{ fontWeight: 700, marginBottom: '0.25rem', textTransform: 'uppercase' }}>Additional Verified Attributes:</div>
+          {attributes.map((a, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.1rem 0' }}>
+              <span style={{ color: '#5A5346' }}>{a.key}:</span>
+              <strong>{a.value}</strong>
             </div>
           ))}
         </div>
@@ -174,7 +263,22 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
  * High-Density Digital Credential Extracted Preview
  * Embeds official digital certificate format, live form values, and verifiable QR code
  */
-function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = true }) {
+function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = true, documentType = 'grade_sheet', attributes = [] }) {
+  const isTC = documentType === 'transfer_certificate'
+  const isBonafide = documentType === 'bonafide_certificate'
+  const isConduct = documentType === 'conduct_certificate'
+  const isGradeSheet = documentType === 'grade_sheet'
+
+  const certTitle = isTC
+    ? 'Official Transfer Certificate'
+    : isBonafide
+    ? 'Student Bonafide Certificate'
+    : isConduct
+    ? 'Conduct & Character Certificate'
+    : documentType === 'degree_certificate'
+    ? 'Degree Certificate'
+    : 'Verified Academic Transcript'
+
   return (
     <div className="certificate-mock-view" style={{ maxWidth: '540px', margin: '0 auto', textAlign: 'center', background: '#FFFFFF', padding: '2.5rem 2rem', border: '8px double #CBD5E1', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
       {/* University Digital Seal */}
@@ -186,7 +290,7 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
         NATIONAL INSTITUTE OF TECHNOLOGY
       </div>
       <div style={{ fontSize: '0.72rem', color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '1.25rem' }}>
-        Verified Digital Credential • Academic Registry
+        {certTitle} • Institutional Registry
       </div>
 
       <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '0.25rem' }}>
@@ -198,16 +302,35 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
       </div>
 
       <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '0.25rem' }}>
-        has successfully completed the prescribed degree curriculum of
+        {isTC ? 'was a recognized student in the program:' : isBonafide ? 'is currently enrolled in the academic program:' : 'has successfully fulfilled the prescribed curriculum of:'}
       </div>
 
       <div className="cert-degree" style={{ fontSize: '1rem', fontWeight: 700, color: '#1E293B', marginBottom: '0.75rem' }}>
-        {formData.degree || 'Degree Program'}
+        {formData.degree || 'Academic Program'}
       </div>
 
-      <div style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '1rem' }}>
-        Cumulative Grade Point Average: <strong>{formData.cgpa || 'N/A'}</strong>
-      </div>
+      {formData.cgpa && !isTC && !isBonafide && !isConduct && (
+        <div style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '1rem' }}>
+          Cumulative Grade Point Average: <strong>{formData.cgpa}</strong>
+        </div>
+      )}
+
+      {/* Flexible Attributes Badges */}
+      {attributes && attributes.length > 0 && (
+        <div style={{ textAlign: 'left', margin: '0.85rem 0', background: 'var(--bg-frost)', padding: '0.75rem 1rem', borderRadius: 6, fontSize: '0.75rem', color: '#334155' }}>
+          <div style={{ fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text-main)' }}>
+            Verified Document Records:
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.4rem' }}>
+            {attributes.map((a, i) => (
+              <div key={i} style={{ background: '#FFFFFF', padding: '0.35rem 0.6rem', borderRadius: 4, border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                <span style={{ color: '#64748B', fontWeight: 500 }}>{a.key}:</span>
+                <strong style={{ color: '#0F172A' }}>{a.value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Extracted Course Marks */}
       {includeMarks && formData.marks && formData.marks.length > 0 && (
@@ -252,6 +375,7 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
   )
 }
 
+
 export function ReviewScreen() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -272,6 +396,8 @@ export function ReviewScreen() {
   const [zoomLevel, setZoomLevel] = useState(1)
   const [includeMarks, setIncludeMarks] = useState(false)
   const [publicVerificationId, setPublicVerificationId] = useState('')
+  const [documentType, setDocumentType] = useState('grade_sheet')
+  const [attributes, setAttributes] = useState([])
 
   // Form data for extracted record (defaults to empty so real documents are not masked)
   const [formData, setFormData] = useState({
@@ -334,8 +460,22 @@ export function ReviewScreen() {
             saveJobPublicIdMapping(targetId, rec.public_verification_id)
           }
 
+          const recDocType = rec.document_type || 'grade_sheet'
+          setDocumentType(recDocType)
+
           const hasMarks = Array.isArray(rec.marks_json) && rec.marks_json.length > 0
           setIncludeMarks(hasMarks)
+
+          if (rec.attributes_json && typeof rec.attributes_json === 'object') {
+            const attrList = Object.entries(rec.attributes_json).map(([k, v], idx) => ({
+              id: `attr_${idx}_${k}`,
+              key: k,
+              value: typeof v === 'object' ? JSON.stringify(v) : String(v ?? ''),
+            }))
+            setAttributes(attrList)
+          } else {
+            setAttributes([])
+          }
 
           setFormData({
             name: rec.name || '',
@@ -357,6 +497,8 @@ export function ReviewScreen() {
           }
         } else {
           // If no record exists yet (e.g. queued, awaiting_upload, or failed)
+          setDocumentType('grade_sheet')
+          setAttributes([])
           setIncludeMarks(false)
           setFormData({
             name: '',
@@ -409,6 +551,23 @@ export function ReviewScreen() {
     }))
   }
 
+  const handleAddAttribute = (key = '', value = '') => {
+    setAttributes((prev) => [
+      ...prev,
+      { id: `attr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`, key, value },
+    ])
+  }
+
+  const handleUpdateAttribute = (id, field, val) => {
+    setAttributes((prev) =>
+      prev.map((attr) => (attr.id === id ? { ...attr, [field]: val } : attr))
+    )
+  }
+
+  const handleRemoveAttribute = (id) => {
+    setAttributes((prev) => prev.filter((attr) => attr.id !== id))
+  }
+
   const handleJobSelect = (jobId) => {
     setCurrentJobId(jobId)
     setSearchParams({ jobId })
@@ -423,14 +582,26 @@ export function ReviewScreen() {
 
     setSaving(true)
     try {
+      const attrsObj = {}
+      attributes.forEach(({ key, value }) => {
+        const k = (key || '').trim()
+        if (k) {
+          attrsObj[k] = (value || '').trim()
+        }
+      })
+
+      const isNonDegree = ['transfer_certificate', 'bonafide_certificate', 'conduct_certificate'].includes(documentType)
+
       const payload = {
+        document_type: documentType,
         name: formData.name,
         roll_number: formData.roll_number,
         register_number: formData.register_number,
         degree: formData.degree,
-        cgpa: formData.cgpa,
+        cgpa: isNonDegree ? '' : formData.cgpa,
         issue_date: formData.issue_date,
         marks_json: includeMarks ? formData.marks : [],
+        attributes_json: attrsObj,
         reviewer_notes: formData.reviewerNotes,
       }
 
@@ -448,6 +619,7 @@ export function ReviewScreen() {
       setSaving(false)
     }
   }
+
 
   const handleConfirmReject = async () => {
     if (jobMeta?.status !== 'needs_review') {
@@ -777,13 +949,13 @@ export function ReviewScreen() {
                       />
                     )
                   ) : (
-                    <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={zoomLevel} />
+                    <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={zoomLevel} documentType={documentType} attributes={attributes} />
                   )}
                 </>
               )}
 
               {activeViewerTab === 'preview' && (
-                <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} includeMarks={includeMarks} />
+                <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} includeMarks={includeMarks} documentType={documentType} attributes={attributes} />
               )}
 
               {activeViewerTab === 'split' && (
@@ -795,7 +967,7 @@ export function ReviewScreen() {
                     {readSasUrl && isImageBlob ? (
                       <img src={readSasUrl} alt="Scan" style={{ width: '100%', borderRadius: 6 }} />
                     ) : (
-                      <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={0.9} includeMarks={includeMarks} />
+                      <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={0.9} includeMarks={includeMarks} documentType={documentType} attributes={attributes} />
                     )}
                   </div>
 
@@ -803,7 +975,7 @@ export function ReviewScreen() {
                     <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '0.5rem', textAlign: 'center' }}>
                       DIGITAL EXTRACTED CREDENTIAL
                     </div>
-                    <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} includeMarks={includeMarks} />
+                    <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} includeMarks={includeMarks} documentType={documentType} attributes={attributes} />
                   </div>
                 </div>
               )}
@@ -829,6 +1001,42 @@ export function ReviewScreen() {
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>
                 Threshold: <span style={{ color: 'var(--status-emerald-text)', fontWeight: 700 }}>&ge; {(confidences.threshold * 100).toFixed(0)}%</span>
+              </div>
+            </div>
+
+            {/* Document Type Classification Selector */}
+            <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+              <div className="form-label" style={{ marginBottom: '0.4rem' }}>
+                <span style={{ fontWeight: 700 }}>Document Classification</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-sub)' }}>
+                  Selected: <strong>{DOCUMENT_TYPE_LABELS[documentType] || 'Custom Document'}</strong>
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.4rem' }}>
+                {[
+                  { id: 'grade_sheet', label: 'Grade Sheet', icon: IconGraduationCap },
+                  { id: 'degree_certificate', label: 'Degree Certificate', icon: IconShield },
+                  { id: 'transfer_certificate', label: 'Transfer Cert (TC)', icon: IconFileText },
+                  { id: 'bonafide_certificate', label: 'Bonafide Cert', icon: IconCheckCircle },
+                  { id: 'conduct_certificate', label: 'Conduct Cert', icon: IconScale },
+                  { id: 'custom', label: 'Other Document', icon: IconFileText },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`btn ${documentType === opt.id ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.5rem', justifyContent: 'center', gap: '0.35rem' }}
+                    onClick={() => {
+                      setDocumentType(opt.id)
+                      if (opt.id !== 'grade_sheet') {
+                        setIncludeMarks(false)
+                      }
+                    }}
+                  >
+                    <opt.icon size={13} />
+                    <span>{opt.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -889,10 +1097,18 @@ export function ReviewScreen() {
               </div>
             </div>
 
-            {/* Field: Degree Title */}
+            {/* Field: Degree / Course Title */}
             <div className="form-group">
               <div className="form-label">
-                <span>Degree Conferred</span>
+                <span>
+                  {documentType === 'transfer_certificate'
+                    ? 'Course / Class Attended'
+                    : documentType === 'bonafide_certificate'
+                    ? 'Academic Program / Branch'
+                    : documentType === 'conduct_certificate'
+                    ? 'Program / Course Completed'
+                    : 'Degree Conferred'}
+                </span>
                 <span className={`confidence-indicator ${(confidences.fields?.degree ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
                   {(confidences.fields?.degree ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
                   <span>Confidence: {((confidences.fields?.degree ?? 1) * 100).toFixed(0)}%</span>
@@ -907,30 +1123,11 @@ export function ReviewScreen() {
               />
             </div>
 
-            {/* Two-column layout for CGPA & Issue Date */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-              {/* Field: CGPA / Grade */}
+            {/* Layout for CGPA & Issue Date (CGPA hidden for non-academic certificates) */}
+            {['transfer_certificate', 'bonafide_certificate', 'conduct_certificate'].includes(documentType) ? (
               <div className="form-group">
                 <div className="form-label">
-                  <span>CGPA / Grade</span>
-                  <span className={`confidence-indicator ${(confidences.fields?.cgpa ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
-                    {(confidences.fields?.cgpa ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
-                    <span>Confidence: {((confidences.fields?.cgpa ?? 1) * 100).toFixed(0)}%</span>
-                  </span>
-                </div>
-                <input
-                  id="input-cgpa"
-                  className={`form-input ${(confidences.fields?.cgpa ?? 1) < confidences.threshold ? 'input-flagged' : ''}`}
-                  type="text"
-                  value={formData.cgpa}
-                  onChange={(e) => handleInputChange('cgpa', e.target.value)}
-                />
-              </div>
-
-              {/* Field: Conferral / Issue Date */}
-              <div className="form-group">
-                <div className="form-label">
-                  <span>Conferral Date (ISO)</span>
+                  <span>Certificate Issue Date (ISO)</span>
                   <span className={`confidence-indicator ${(confidences.fields?.issue_date ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
                     {(confidences.fields?.issue_date ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
                     <span>Confidence: {((confidences.fields?.issue_date ?? 1) * 100).toFixed(0)}%</span>
@@ -945,6 +1142,142 @@ export function ReviewScreen() {
                   onChange={(e) => handleInputChange('issue_date', e.target.value)}
                 />
               </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                {/* Field: CGPA / Grade */}
+                <div className="form-group">
+                  <div className="form-label">
+                    <span>CGPA / Grade</span>
+                    <span className={`confidence-indicator ${(confidences.fields?.cgpa ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
+                      {(confidences.fields?.cgpa ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
+                      <span>Confidence: {((confidences.fields?.cgpa ?? 1) * 100).toFixed(0)}%</span>
+                    </span>
+                  </div>
+                  <input
+                    id="input-cgpa"
+                    className={`form-input ${(confidences.fields?.cgpa ?? 1) < confidences.threshold ? 'input-flagged' : ''}`}
+                    type="text"
+                    value={formData.cgpa}
+                    onChange={(e) => handleInputChange('cgpa', e.target.value)}
+                  />
+                </div>
+
+                {/* Field: Conferral / Issue Date */}
+                <div className="form-group">
+                  <div className="form-label">
+                    <span>Conferral Date (ISO)</span>
+                    <span className={`confidence-indicator ${(confidences.fields?.issue_date ?? 1) >= confidences.threshold ? 'confidence-high' : 'confidence-low'}`}>
+                      {(confidences.fields?.issue_date ?? 1) < confidences.threshold && <IconAlertTriangle size={12} color="var(--status-amber)" />}
+                      <span>Confidence: {((confidences.fields?.issue_date ?? 1) * 100).toFixed(0)}%</span>
+                    </span>
+                  </div>
+                  <input
+                    id="input-graduation-date"
+                    className={`form-input ${(confidences.fields?.issue_date ?? 1) < confidences.threshold ? 'input-flagged' : ''}`}
+                    type="text"
+                    placeholder="YYYY-MM-DD"
+                    value={formData.issue_date}
+                    onChange={(e) => handleInputChange('issue_date', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Attributes Section */}
+            <div style={{
+              margin: '1rem 0',
+              padding: '0.85rem 1rem',
+              background: 'var(--bg-frost)',
+              borderRadius: 8,
+              border: '1px solid var(--border-subtle)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    Document Attributes &amp; Metadata ({attributes.length})
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-sub)' }}>
+                    Flexible fields extracted from OCR or verified from registrar records.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                  onClick={() => handleAddAttribute()}
+                >
+                  + Add Attribute
+                </button>
+              </div>
+
+              {/* Quick Presets based on document type */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-sub)', alignSelf: 'center', marginRight: '0.2rem' }}>Quick Presets:</span>
+                {(documentType === 'transfer_certificate'
+                  ? ["Father's Name", 'Date of Admission', 'Date of Leaving', 'Conduct', 'Reason for Leaving']
+                  : documentType === 'bonafide_certificate'
+                  ? ['Academic Year', 'Purpose', 'Enrollment Status']
+                  : documentType === 'conduct_certificate'
+                  ? ['Period of Study', 'Conduct', 'Remarks']
+                  : ["Father's Name", 'Academic Year', 'Remarks']
+                ).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    style={{
+                      background: '#FFFFFF',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 12,
+                      padding: '0.15rem 0.5rem',
+                      fontSize: '0.68rem',
+                      color: 'var(--slate-blue-dark)',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      if (!attributes.some(a => a.key.toLowerCase() === preset.toLowerCase())) {
+                        handleAddAttribute(preset, '')
+                      }
+                    }}
+                  >
+                    + {preset}
+                  </button>
+                ))}
+              </div>
+
+              {attributes.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '180px', overflowY: 'auto' }}>
+                  {attributes.map((attr) => (
+                    <div key={attr.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.4rem', alignItems: 'center' }}>
+                      <input
+                        className="form-input"
+                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
+                        placeholder="Attribute Name (e.g. Father's Name)"
+                        value={attr.key}
+                        onChange={(e) => handleUpdateAttribute(attr.id, 'key', e.target.value)}
+                      />
+                      <input
+                        className="form-input"
+                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
+                        placeholder="Attribute Value (e.g. Robert Doe)"
+                        value={attr.value}
+                        onChange={(e) => handleUpdateAttribute(attr.id, 'value', e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttribute(attr.id)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--status-rose)', cursor: 'pointer', padding: '0.2rem' }}
+                        title="Remove Attribute"
+                      >
+                        <IconX size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: '0.4rem', fontSize: '0.72rem', color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' }}>
+                  No extra attributes attached. Click a preset above or &quot;+ Add Attribute&quot; if needed.
+                </div>
+              )}
             </div>
 
             {/* Tabular Marks Section Toggle */}
@@ -965,7 +1298,9 @@ export function ReviewScreen() {
                   Tabular Transcript Marks Breakdown
                 </div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-sub)' }}>
-                  Include for semester marksheets & transcripts. Uncheck for degree certificates & diplomas.
+                  {documentType === 'grade_sheet'
+                    ? 'Include for semester marksheets & transcripts. Uncheck for degree certificates & diplomas.'
+                    : 'ℹ️ Course marks omitted for certificates. Check box if this document includes course grades.'}
                 </div>
               </div>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
