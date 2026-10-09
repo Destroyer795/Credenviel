@@ -92,6 +92,25 @@ class WorkerProcessor:
                     ALTER TABLE records ADD COLUMN IF NOT EXISTS document_type TEXT NOT NULL DEFAULT 'grade_sheet';
                     ALTER TABLE records ADD COLUMN IF NOT EXISTS attributes_json JSONB NOT NULL DEFAULT '{}'::jsonb;
                     CREATE INDEX IF NOT EXISTS idx_records_document_type ON records(document_type);
+
+                    CREATE OR REPLACE FUNCTION check_status_transition()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        IF NEW.status = OLD.status THEN
+                            RETURN NEW;
+                        END IF;
+
+                        IF (OLD.status = 'awaiting_upload' AND NEW.status IN ('queued', 'failed')) OR
+                           (OLD.status = 'queued' AND NEW.status IN ('processing', 'failed')) OR
+                           (OLD.status = 'processing' AND NEW.status IN ('processed', 'needs_review', 'failed')) OR
+                           (OLD.status = 'needs_review' AND NEW.status IN ('processed', 'failed')) THEN
+                            RETURN NEW;
+                        END IF;
+
+                        RAISE EXCEPTION 'invalid status transition from % to %', OLD.status, NEW.status
+                            USING ERRCODE = 'check_violation';
+                    END;
+                    $$ LANGUAGE plpgsql;
                 """)
         except Exception as e:
             logger.debug("Schema verification notice: %s", e)
@@ -258,8 +277,8 @@ class WorkerProcessor:
                                 raw_fields.get("register_number"),
                                 raw_fields.get("degree"),
                                 Jsonb(raw_fields.get("marks")) if raw_fields.get("marks") is not None else None,
-                                raw_fields.get("cgpa"),
-                                raw_fields.get("issue_date"),
+                                (raw_fields.get("cgpa") if raw_fields.get("cgpa") else None),
+                                (raw_fields.get("issue_date") if raw_fields.get("issue_date") else None),
                                 Jsonb(confidence_json),
                                 source_hash,
                                 fields_hash,

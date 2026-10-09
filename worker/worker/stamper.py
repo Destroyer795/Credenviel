@@ -2,7 +2,10 @@
 
 import io
 import logging
-import fitz
+try:
+    import fitz
+except ImportError:
+    fitz = None
 import qrcode
 
 logger = logging.getLogger("worker.stamper")
@@ -45,6 +48,10 @@ def stamp_certificate(
     Returns:
         bytes: Stamped PDF document bytes.
     """
+    if fitz is None:
+        logger.warning("PyMuPDF (fitz) is not available; skipping QR watermark stamping")
+        return raw_bytes
+
     verify_url = f"{base_url.rstrip('/')}/verify/{public_verification_id}"
     qr_bytes = generate_qr_png(verify_url)
 
@@ -79,14 +86,14 @@ def stamp_certificate(
             page.draw_rect(fitz.Rect(35, 35, 560, 735), color=(0.2, 0.35, 0.6), width=1)
             page.insert_text(
                 fitz.Point(70, 90),
-                "NATIONAL INSTITUTE OF TECHNOLOGY",
+                "INSTITUTIONAL CREDENTIAL REGISTRY",
                 fontsize=16,
                 fontname="helv",
                 color=(0.1, 0.25, 0.5),
             )
             page.insert_text(
                 fitz.Point(70, 115),
-                "OFFICIAL ACADEMIC CREDENTIAL TRANSCRIPT",
+                "DIGITIZED ACADEMIC CREDENTIAL RECORD",
                 fontsize=11,
                 fontname="helv",
                 color=(0.3, 0.4, 0.5),

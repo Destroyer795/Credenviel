@@ -297,12 +297,27 @@ export async function getReviewDetails(jobId, authState) {
  * POST /api/v1/review/{jobId}/resolve
  */
 export async function resolveReview(jobId, payload, authState) {
+  // Normalize payload: PostgreSQL numeric and date columns require null rather than "" (empty string)
+  const cleanPayload = { ...payload }
+  if (
+    cleanPayload.cgpa !== undefined &&
+    (cleanPayload.cgpa === '' || cleanPayload.cgpa === null || (typeof cleanPayload.cgpa === 'string' && !cleanPayload.cgpa.trim()))
+  ) {
+    cleanPayload.cgpa = null
+  }
+  if (
+    cleanPayload.issue_date !== undefined &&
+    (cleanPayload.issue_date === '' || cleanPayload.issue_date === null || (typeof cleanPayload.issue_date === 'string' && !cleanPayload.issue_date.trim()))
+  ) {
+    cleanPayload.issue_date = null
+  }
+
   return await fetchWithAuth(
     `/api/v1/review/${encodeURIComponent(jobId)}/resolve`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     },
     authState
   )

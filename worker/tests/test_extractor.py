@@ -20,9 +20,8 @@ def test_get_extractor_stub():
     assert ext.profile == "low"
 
     cfg_empty = {"doc_intelligence_endpoint": ""}
-    ext2 = get_extractor(cfg_empty, use_stub=False)
-    assert isinstance(ext2, StubExtractor)
-    assert ext2.profile == "high"
+    with pytest.raises(RuntimeError, match="DOC_INTELLIGENCE_ENDPOINT"):
+        get_extractor(cfg_empty, use_stub=False)
 
 
 def test_get_extractor_azure():

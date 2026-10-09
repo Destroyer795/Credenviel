@@ -503,6 +503,13 @@ func (s *Server) handleResolveReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.CGPA != nil && strings.TrimSpace(*req.CGPA) == "" {
+		req.CGPA = nil
+	}
+	if req.IssueDate != nil && strings.TrimSpace(*req.IssueDate) == "" {
+		req.IssueDate = nil
+	}
+
 	marks := req.Marks
 	if marks == nil {
 		marks = req.MarksJSON

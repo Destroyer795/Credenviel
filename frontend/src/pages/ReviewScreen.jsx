@@ -94,10 +94,10 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
       {/* University Header */}
       <div style={{ textAlign: 'center', borderBottom: '2px double #8C8270', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
         <div style={{ fontSize: '0.72rem', letterSpacing: '0.12em', color: '#5A5346', textTransform: 'uppercase' }}>
-          GOVERNMENT OF INDIA • HIGHER EDUCATION ARCHIVES
+          OFFICIAL INSTITUTIONAL ARCHIVE
         </div>
         <div style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '0.04em', margin: '0.25rem 0', fontFamily: 'serif', color: '#1E1D1A' }}>
-          NATIONAL INSTITUTE OF TECHNOLOGY
+          {attrMap.institution || attrMap.university || attrMap.college || 'Institution not extracted'}
         </div>
         <div style={{ fontSize: '0.75rem', fontStyle: 'italic', color: '#685F51' }}>
           {isTC ? 'Office of Academic Affairs • Student Transfer Cell' : 'Office of the Registrar & Controller of Examinations'}
@@ -120,37 +120,37 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
             color: '#111827',
           }}
         >
-          {formData.name || 'Candidate Name'}
+          {formData.name || '—'}
         </div>
         <p style={{ margin: '0 0 0.35rem 0' }}>
-          bearing Roll No. <strong>{formData.roll_number || '2021-CS-0428'}</strong> and Reg No. <strong>{formData.register_number || 'REG-987654'}</strong>
+          bearing Roll No. <strong>{formData.roll_number || '—'}</strong> and Reg No. <strong>{formData.register_number || '—'}</strong>
         </p>
 
         {isTC ? (
           <div style={{ textAlign: 'left', margin: '1rem 0', background: 'rgba(230, 220, 195, 0.4)', padding: '0.85rem', border: '1px solid #D2C7B6', borderRadius: 3 }}>
             <div style={{ marginBottom: '0.35rem' }}>
-              <strong>Course / Class:</strong> {formData.degree || 'B.Tech in Computer Science & Engineering'}
+              <strong>Course / Class:</strong> {formData.degree || '—'}
             </div>
             <div style={{ marginBottom: '0.35rem' }}>
-              <strong>Father&apos;s Name:</strong> {attrMap.father_name || attrMap.father_s_name || attrMap["Father's Name"] || 'Robert Doe'}
+              <strong>Father&apos;s Name:</strong> {attrMap.father_name || attrMap.father_s_name || attrMap["Father's Name"] || '—'}
             </div>
             <div style={{ marginBottom: '0.35rem' }}>
-              <strong>Date of Admission:</strong> {attrMap.date_of_admission || attrMap["Date of Admission"] || '2022-08-01'}
+              <strong>Date of Admission:</strong> {attrMap.date_of_admission || attrMap["Date of Admission"] || '—'}
             </div>
             <div style={{ marginBottom: '0.35rem' }}>
-              <strong>Date of Leaving:</strong> {attrMap.date_of_leaving || attrMap["Date of Leaving"] || '2026-05-30'}
+              <strong>Date of Leaving:</strong> {attrMap.date_of_leaving || attrMap["Date of Leaving"] || '—'}
             </div>
             <div style={{ marginBottom: '0.35rem' }}>
-              <strong>Conduct &amp; Character:</strong> <strong>{attrMap.conduct || attrMap.character || attrMap["Conduct"] || 'Good'}</strong>
+              <strong>Conduct &amp; Character:</strong> <strong>{attrMap.conduct || attrMap.character || attrMap["Conduct"] || '—'}</strong>
             </div>
             <div>
-              <strong>Reason for Leaving:</strong> {attrMap.reason_for_leaving || attrMap["Reason for Leaving"] || 'Course Completed'}
+              <strong>Reason for Leaving:</strong> {attrMap.reason_for_leaving || attrMap["Reason for Leaving"] || '—'}
             </div>
           </div>
         ) : isBonafide ? (
           <div style={{ margin: '0.75rem 0', textAlign: 'left', background: 'rgba(230, 220, 195, 0.35)', padding: '0.75rem', border: '1px solid #D2C7B6', borderRadius: 3 }}>
             <p style={{ margin: '0 0 0.4rem 0' }}>
-              is a bonafide student of this Institute pursuing <strong>{formData.degree || 'B.Tech Program'}</strong>.
+              is a bonafide student of this Institute pursuing <strong>{formData.degree || '—'}</strong>.
             </p>
             {attrMap.academic_year && <div><strong>Academic Year:</strong> {attrMap.academic_year}</div>}
             {attrMap.purpose && <div><strong>Purpose:</strong> {attrMap.purpose}</div>}
@@ -158,9 +158,9 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
         ) : isConduct ? (
           <div style={{ margin: '0.75rem 0', textAlign: 'left', background: 'rgba(230, 220, 195, 0.35)', padding: '0.75rem', border: '1px solid #D2C7B6', borderRadius: 3 }}>
             <p style={{ margin: '0 0 0.4rem 0' }}>
-              has completed the program of <strong>{formData.degree || 'Undergraduate Study'}</strong>.
+              has completed the program of <strong>{formData.degree || '—'}</strong>.
             </p>
-            <div><strong>Conduct &amp; Character:</strong> <strong>{attrMap.conduct || 'Exemplary'}</strong></div>
+            <div><strong>Conduct &amp; Character:</strong> <strong>{attrMap.conduct || '—'}</strong></div>
           </div>
         ) : (
           <>
@@ -177,7 +177,7 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
                 borderRadius: 2,
               }}
             >
-              {formData.degree || 'Bachelor of Science in Computer Science & Engineering'}
+              {formData.degree || '—'}
             </div>
             {formData.cgpa && (
               <p style={{ margin: '0.5rem 0' }}>
@@ -196,8 +196,8 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
           </div>
           {formData.marks.map((m, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.15rem 0', borderBottom: i < formData.marks.length - 1 ? '1px dotted #D2C7B6' : 'none' }}>
-              <span>{m.code || `SUBJ-${i + 1}`} - {m.name}</span>
-              <span>Credits: {m.credits || '4'} | <strong>Grade: {m.grade || 'A'}</strong></span>
+              <span>{m.code || m.subject_code || 'Course code not extracted'} - {m.name || m.subject_name || 'Course name not extracted'}</span>
+              <span>{m.credits ? `Credits: ${m.credits} | ` : ''}<strong>{m.grade ? `Grade: ${m.grade}` : 'Grade not extracted'}</strong></span>
             </div>
           ))}
         </div>
@@ -219,8 +219,8 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
       {/* Footer Signatures and Physical Seal */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '1.75rem', paddingTop: '1rem', borderTop: '1px solid #C8BDAB' }}>
         <div style={{ textAlign: 'left', fontSize: '0.72rem' }}>
-          <div><strong>Date of Issue:</strong> {formData.issue_date || '2025-05-15'}</div>
-          <div><strong>Ledger Folio:</strong> NIT-CONV-2025/892</div>
+          <div><strong>Date of Issue:</strong> {formData.issue_date || 'Not extracted'}</div>
+          <div><strong>Ledger Folio:</strong> {attrMap.serial_no || 'Not extracted'}</div>
           <div style={{ fontSize: '0.65rem', color: '#786F60', marginTop: '0.25rem' }}>Scan ID: {jobId ? jobId.slice(0, 16) : 'PENDING-SCAN'}</div>
         </div>
 
@@ -250,7 +250,7 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
             <div>SEAL</div>
           </div>
           <div style={{ fontSize: '0.7rem', color: '#1E3A8A', fontStyle: 'italic', fontFamily: 'serif' }}>
-            Prof. K. R. Sharma
+            Signature not extracted
           </div>
           <div style={{ fontSize: '0.65rem', color: '#5A5346' }}>Controller of Examinations</div>
         </div>
@@ -263,11 +263,10 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
  * High-Density Digital Credential Extracted Preview
  * Embeds official digital certificate format, live form values, and verifiable QR code
  */
-function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = true, documentType = 'grade_sheet', attributes = [] }) {
+function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = true, documentType = 'grade_sheet', attributes = [], jobMeta }) {
   const isTC = documentType === 'transfer_certificate'
   const isBonafide = documentType === 'bonafide_certificate'
   const isConduct = documentType === 'conduct_certificate'
-  const isGradeSheet = documentType === 'grade_sheet'
 
   const certTitle = isTC
     ? 'Official Transfer Certificate'
@@ -279,6 +278,91 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
     ? 'Degree Certificate'
     : 'Verified Academic Transcript'
 
+  const isQueued = jobMeta?.status === 'queued'
+  const isProcessing = jobMeta?.status === 'processing'
+  const hasExtractedData = Boolean(
+    formData.name ||
+    formData.roll_number ||
+    formData.register_number ||
+    formData.degree ||
+    formData.cgpa ||
+    (formData.marks && formData.marks.length > 0) ||
+    (attributes && attributes.length > 0)
+  )
+
+  if (isQueued || isProcessing || !hasExtractedData) {
+    const fileName = jobMeta?.blob_key ? jobMeta.blob_key.split('/').pop() : 'Document file'
+    return (
+      <div
+        className="certificate-pending-view"
+        style={{
+          maxWidth: '540px',
+          margin: '0 auto',
+          textAlign: 'center',
+          background: '#FFFFFF',
+          padding: '3rem 2rem',
+          border: '2px dashed #CBD5E1',
+          borderRadius: '12px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+        }}
+      >
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: '50%',
+            background: isProcessing ? 'rgba(59, 130, 246, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+            color: isProcessing ? '#2563EB' : '#D97706',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1rem',
+          }}
+        >
+          {isProcessing ? <IconRefresh size={26} className="spin" /> : <IconFileText size={26} />}
+        </div>
+
+        <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.4rem' }}>
+          {isProcessing ? 'OCR Extraction in Progress' : isQueued ? 'Awaiting Worker Pickup' : 'No OCR Metadata Extracted'}
+        </h4>
+
+        <p style={{ fontSize: '0.82rem', color: '#64748B', lineHeight: 1.6, maxWidth: '420px', margin: '0 auto 1.5rem' }}>
+          {isProcessing
+            ? 'The background OCR worker is actively scanning and scoring confidence for this document. Verified records will appear automatically.'
+            : isQueued
+            ? 'This document is safely registered in the Azure Service Bus queue. The worker process will parse text, student identifiers, and tabular grades shortly.'
+            : 'No structured fields have been extracted yet. You can inspect the raw scan in the Document Scan tab or enter values manually on the right.'}
+        </p>
+
+        <div style={{ background: 'var(--bg-frost)', padding: '0.85rem 1rem', borderRadius: 8, fontSize: '0.75rem', textAlign: 'left', color: '#334155', maxWidth: '420px', margin: '0 auto 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#64748B' }}>Target File:</span>
+            <strong style={{ fontFamily: 'monospace' }}>{fileName}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#64748B' }}>Classification:</span>
+            <strong>{certTitle}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#64748B' }}>Queue Status:</span>
+            <span style={{ textTransform: 'uppercase', fontWeight: 700, color: isProcessing ? '#2563EB' : '#D97706' }}>
+              {jobMeta?.status || 'QUEUED'}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
+          Switch to <strong>Document Scan</strong> tab above to view the raw scan.
+        </div>
+      </div>
+    )
+  }
+
+  // Use only values returned by extraction; never invent document identity data.
+  const institutionName =
+    attributes.find(a => /institution|university|college|school|board/i.test(a.key))?.value ||
+    'Institution not extracted'
+
   return (
     <div className="certificate-mock-view" style={{ maxWidth: '540px', margin: '0 auto', textAlign: 'center', background: '#FFFFFF', padding: '2.5rem 2rem', border: '8px double #CBD5E1', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
       {/* University Digital Seal */}
@@ -287,7 +371,7 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
       </div>
 
       <div className="cert-uni-name" style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '0.06em', color: 'var(--text-main)', textTransform: 'uppercase' }}>
-        NATIONAL INSTITUTE OF TECHNOLOGY
+        {institutionName}
       </div>
       <div style={{ fontSize: '0.72rem', color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '1.25rem' }}>
         {certTitle} • Institutional Registry
@@ -298,7 +382,7 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
       </div>
 
       <div className="cert-recipient" style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', borderBottom: '1px dashed #CBD5E1', paddingBottom: '0.4rem', marginBottom: '0.75rem' }}>
-        {formData.name || 'Candidate Name'}
+        {formData.name || '—'}
       </div>
 
       <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '0.25rem' }}>
@@ -306,7 +390,7 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
       </div>
 
       <div className="cert-degree" style={{ fontSize: '1rem', fontWeight: 700, color: '#1E293B', marginBottom: '0.75rem' }}>
-        {formData.degree || 'Academic Program'}
+        {formData.degree || '—'}
       </div>
 
       {formData.cgpa && !isTC && !isBonafide && !isConduct && (
@@ -340,7 +424,7 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
           </div>
           {formData.marks.slice(0, 3).map((m, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted #E2E8F0', padding: '0.2rem 0' }}>
-              <span>{m.code || `Course ${i + 1}`}: {m.name}</span>
+              <span>{m.code || m.subject_code || `Course ${i + 1}`}: {m.name || m.subject_name}</span>
               <strong>Grade: {m.grade}</strong>
             </div>
           ))}
@@ -355,11 +439,11 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
       {/* Certificate Footer with Live QR Code */}
       <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1rem', marginTop: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', textAlign: 'left' }}>
         <div style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: 1.5 }}>
-          <div><strong>Conferred:</strong> {formData.issue_date || 'N/A'}</div>
-          <div><strong>Roll No:</strong> {formData.roll_number || 'N/A'}</div>
-          <div><strong>Reg No:</strong> {formData.register_number || 'N/A'}</div>
-          <div style={{ marginTop: '0.35rem', color: 'var(--status-emerald-text)', fontWeight: 600 }}>
-            • Confirmed by Exam Cell Staff
+          <div><strong>Conferred:</strong> {formData.issue_date || '—'}</div>
+          <div><strong>Roll No:</strong> {formData.roll_number || '—'}</div>
+          <div><strong>Reg No:</strong> {formData.register_number || '—'}</div>
+          <div style={{ marginTop: '0.35rem', color: jobMeta?.status === 'digitized' ? 'var(--status-emerald-text)' : 'var(--text-sub)', fontWeight: 600 }}>
+            {jobMeta?.status === 'digitized' ? '• Digitized & Cryptographically Signed' : '• Pending Examination Verification'}
           </div>
         </div>
 
@@ -477,6 +561,20 @@ export function ReviewScreen() {
             setAttributes([])
           }
 
+          const loadedMarks = hasMarks
+            ? rec.marks_json.map((m) => ({
+                code: m.code || m.subject_code || '',
+                name: m.name || m.subject_name || '',
+                credits: m.credits || m.max_marks || '',
+                grade: m.grade || '',
+                grade_points: m.grade_points || m.marks_obtained || '',
+                subject_code: m.subject_code || m.code || '',
+                subject_name: m.subject_name || m.name || '',
+                marks_obtained: m.marks_obtained || m.grade_points || '',
+                max_marks: m.max_marks || m.credits || '',
+              }))
+            : []
+
           setFormData({
             name: rec.name || '',
             roll_number: rec.roll_number || '',
@@ -484,7 +582,7 @@ export function ReviewScreen() {
             degree: rec.degree || '',
             cgpa: rec.cgpa || '',
             issue_date: rec.issue_date || '',
-            marks: hasMarks ? rec.marks_json : [],
+            marks: loadedMarks,
             reviewerNotes: rec.corrections_json?.notes || 'Verified against university registrar ledger. Signatures authenticated.',
           })
 
@@ -532,7 +630,12 @@ export function ReviewScreen() {
   const handleMarksChange = (idx, col, val) => {
     setFormData((prev) => {
       const updatedMarks = [...prev.marks]
-      updatedMarks[idx] = { ...updatedMarks[idx], [col]: val }
+      const row = { ...updatedMarks[idx], [col]: val }
+      if (col === 'code') row.subject_code = val
+      if (col === 'name') row.subject_name = val
+      if (col === 'credits') row.max_marks = val
+      if (col === 'grade_points') row.marks_obtained = val
+      updatedMarks[idx] = row
       return { ...prev, marks: updatedMarks }
     })
   }
@@ -592,17 +695,40 @@ export function ReviewScreen() {
 
       const isNonDegree = ['transfer_certificate', 'bonafide_certificate', 'conduct_certificate'].includes(documentType)
 
+      const rawCgpa = typeof formData.cgpa === 'string' ? formData.cgpa.trim() : (formData.cgpa != null ? String(formData.cgpa).trim() : '')
+      if (!isNonDegree && rawCgpa && isNaN(Number(rawCgpa))) {
+        alert('Please enter a valid numeric CGPA (e.g. 8.5) or leave it empty.')
+        setSaving(false)
+        return
+      }
+      const normalizedCgpa = isNonDegree || !rawCgpa ? null : rawCgpa
+
+      const rawIssueDate = typeof formData.issue_date === 'string' ? formData.issue_date.trim() : (formData.issue_date != null ? String(formData.issue_date).trim() : '')
+      const normalizedIssueDate = !rawIssueDate ? null : rawIssueDate
+
       const payload = {
         document_type: documentType,
-        name: formData.name,
-        roll_number: formData.roll_number,
-        register_number: formData.register_number,
-        degree: formData.degree,
-        cgpa: isNonDegree ? '' : formData.cgpa,
-        issue_date: formData.issue_date,
-        marks_json: includeMarks ? formData.marks : [],
+        name: (formData.name || '').trim() || null,
+        roll_number: (formData.roll_number || '').trim() || null,
+        register_number: (formData.register_number || '').trim() || null,
+        degree: (formData.degree || '').trim() || null,
+        cgpa: normalizedCgpa,
+        issue_date: normalizedIssueDate,
+        marks_json: includeMarks && Array.isArray(formData.marks)
+          ? formData.marks.map((m) => ({
+              subject_code: (m.subject_code || m.code || '').trim(),
+              subject_name: (m.subject_name || m.name || '').trim(),
+              code: (m.code || m.subject_code || '').trim(),
+              name: (m.name || m.subject_name || '').trim(),
+              marks_obtained: String(m.marks_obtained || m.grade_points || '').trim(),
+              max_marks: String(m.max_marks || m.credits || '100').trim(),
+              credits: String(m.credits || m.max_marks || '').trim(),
+              grade: (m.grade || '').trim(),
+              grade_points: String(m.grade_points || m.marks_obtained || '').trim(),
+            }))
+          : [],
         attributes_json: attrsObj,
-        reviewer_notes: formData.reviewerNotes,
+        reviewer_notes: (formData.reviewerNotes || '').trim(),
       }
 
       const res = await resolveReview(currentJobId, payload, auth)
@@ -640,10 +766,17 @@ export function ReviewScreen() {
     }
   }
 
-  const isImageBlob =
-    readSasUrl &&
-    (/\.(png|jpe?g|webp|gif)($|\?)/i.test(readSasUrl) ||
-      (jobMeta?.filename && /\.(png|jpe?g|webp|gif)$/i.test(jobMeta.filename)))
+  const isImageBlob = Boolean(
+    (readSasUrl && /\.(png|jpe?g|webp|bmp|gif)($|\?)/i.test(readSasUrl)) ||
+    (jobMeta?.blob_key && /\.(png|jpe?g|webp|bmp|gif)$/i.test(jobMeta.blob_key)) ||
+    (jobMeta?.filename && /\.(png|jpe?g|webp|bmp|gif)$/i.test(jobMeta.filename))
+  )
+
+  const isPdfBlob = Boolean(
+    (readSasUrl && /\.pdf($|\?)/i.test(readSasUrl)) ||
+    (jobMeta?.blob_key && /\.pdf$/i.test(jobMeta.blob_key)) ||
+    (jobMeta?.filename && /\.pdf$/i.test(jobMeta.filename))
+  )
 
   const targetVerifyId = publicVerificationId || currentJobId
   const verifyUrl = typeof window !== 'undefined' && targetVerifyId
@@ -925,7 +1058,13 @@ export function ReviewScreen() {
             >
               {activeViewerTab === 'scan' && (
                 <>
-                  {readSasUrl ? (
+                  {loading || (!readSasUrl && currentJobId) ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '520px', color: 'var(--text-sub)' }}>
+                      <div className="spinner" style={{ width: 42, height: 42, border: '3px solid var(--border-soft)', borderTopColor: 'var(--brand-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', marginBottom: '1rem' }} />
+                      <div style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main)' }}>Loading Document Scan...</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-sub)', marginTop: '0.35rem' }}>Fetching secure authenticated preview from storage</div>
+                    </div>
+                  ) : readSasUrl ? (
                     isImageBlob ? (
                       <div style={{ textAlign: 'center' }}>
                         <img
@@ -949,13 +1088,24 @@ export function ReviewScreen() {
                       />
                     )
                   ) : (
-                    <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={zoomLevel} documentType={documentType} attributes={attributes} />
+                    <div style={{ padding: '3rem 1.5rem', textAlign: 'center', background: 'var(--bg-frost)', borderRadius: 8, border: '1px dashed var(--border-soft)', color: 'var(--text-sub)' }}>
+                      <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Document Scan Unavailable</p>
+                      <span style={{ fontSize: '0.75rem' }}>No document is currently selected or available in queue.</span>
+                    </div>
                   )}
                 </>
               )}
 
               {activeViewerTab === 'preview' && (
-                <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} includeMarks={includeMarks} documentType={documentType} attributes={attributes} />
+                <DigitalExtractedPreview
+                  formData={formData}
+                  jobId={currentJobId}
+                  verifyUrl={verifyUrl}
+                  includeMarks={includeMarks}
+                  documentType={documentType}
+                  attributes={attributes}
+                  jobMeta={jobMeta}
+                />
               )}
 
               {activeViewerTab === 'split' && (
@@ -964,10 +1114,34 @@ export function ReviewScreen() {
                     <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '0.5rem', textAlign: 'center' }}>
                       SOURCE DOCUMENT SCAN
                     </div>
-                    {readSasUrl && isImageBlob ? (
-                      <img src={readSasUrl} alt="Scan" style={{ width: '100%', borderRadius: 6 }} />
+                    {loading || (!readSasUrl && currentJobId) ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '540px', background: '#fff', borderRadius: 6, border: '1px solid var(--border-soft)', color: 'var(--text-sub)' }}>
+                        <div className="spinner" style={{ width: 34, height: 34, border: '3px solid var(--border-soft)', borderTopColor: 'var(--brand-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', marginBottom: '1rem' }} />
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Loading Source Scan...</span>
+                      </div>
+                    ) : readSasUrl && isPdfBlob ? (
+                      <iframe
+                        src={readSasUrl}
+                        title="Original Certificate Document"
+                        style={{ width: '100%', height: '540px', border: '1px solid var(--border-soft)', borderRadius: 6, background: '#fff' }}
+                      />
+                    ) : readSasUrl && isImageBlob ? (
+                      <img
+                        src={readSasUrl}
+                        alt="Scanned Document"
+                        style={{ width: '100%', maxHeight: '540px', objectFit: 'contain', borderRadius: 6, border: '1px solid var(--border-soft)' }}
+                      />
+                    ) : readSasUrl ? (
+                      <iframe
+                        src={readSasUrl}
+                        title="Original Certificate Document"
+                        style={{ width: '100%', height: '540px', border: '1px solid var(--border-soft)', borderRadius: 6, background: '#fff' }}
+                      />
                     ) : (
-                      <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={0.9} includeMarks={includeMarks} documentType={documentType} attributes={attributes} />
+                      <div style={{ padding: '3rem 1.5rem', textAlign: 'center', background: 'var(--bg-frost)', borderRadius: 8, border: '1px dashed var(--border-soft)', color: 'var(--text-sub)' }}>
+                        <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Scan preview unavailable</p>
+                        <span style={{ fontSize: '0.75rem' }}>No direct secure read URL available for blob.</span>
+                      </div>
                     )}
                   </div>
 
@@ -975,7 +1149,15 @@ export function ReviewScreen() {
                     <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '0.5rem', textAlign: 'center' }}>
                       DIGITAL EXTRACTED CREDENTIAL
                     </div>
-                    <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} includeMarks={includeMarks} documentType={documentType} attributes={attributes} />
+                    <DigitalExtractedPreview
+                      formData={formData}
+                      jobId={currentJobId}
+                      verifyUrl={verifyUrl}
+                      includeMarks={includeMarks}
+                      documentType={documentType}
+                      attributes={attributes}
+                      jobMeta={jobMeta}
+                    />
                   </div>
                 </div>
               )}

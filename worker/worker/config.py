@@ -22,7 +22,7 @@ def load_config() -> dict:
         "blob_container": os.getenv("BLOB_CONTAINER", "raw-uploads"),
         "doc_intelligence_endpoint": os.getenv("DOC_INTELLIGENCE_ENDPOINT", ""),
         "doc_intelligence_key": os.getenv("DOC_INTELLIGENCE_KEY", ""),
-        "doc_intelligence_model_id": os.getenv("DOC_INTELLIGENCE_MODEL_ID", ""),
+        "doc_intelligence_model_id": os.getenv("DOC_INTELLIGENCE_MODEL_ID", "prebuilt-layout"),
         "confidence_threshold": float(os.getenv("CONFIDENCE_THRESHOLD", "0.85")),
         "queue_backend": os.getenv("QUEUE_BACKEND", "local"),
         "store_backend": os.getenv("STORE_BACKEND", "local"),
