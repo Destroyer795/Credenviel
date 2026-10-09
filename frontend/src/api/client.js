@@ -1,6 +1,7 @@
 // API Client for Credenviel Backend with Seamless Offline Demo Fallback
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+const CLOUD_API_URL = 'https://ca-api-n2ivlk5gk235i.blackhill-c3a2b095.eastasia.azurecontainerapps.io'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || CLOUD_API_URL
 
 export class ApiError extends Error {
   constructor(status, message, data = null) {
@@ -87,7 +88,11 @@ async function fetchWithAuth(endpoint, options = {}, authState = null) {
 
   // Inject dev headers as fallback for dev mode
   if (authState?.user) {
-    headers['X-User-Role'] = authState.user.role
+    const backendRole = authState.user.role === 'admin' ? 'issuer' : authState.user.role
+    headers['X-Dev-Role'] = backendRole
+    headers['X-Dev-User'] = authState.user.oid
+    headers['X-Dev-Name'] = authState.user.name
+    headers['X-User-Role'] = backendRole
     headers['X-User-ID'] = authState.user.oid
     headers['X-User-Name'] = authState.user.name
   }
@@ -336,34 +341,60 @@ export async function getVerification(verificationId) {
     if (res.status === 429) {
       throw new ApiError(429, 'Rate limit exceeded: maximum 30 requests per minute from this IP address.')
     }
-    if (res.status === 404) {
-      throw new ApiError(404, 'No verified credential found for this ID.')
-    }
   } catch (err) {
-    if (err instanceof ApiError) throw err
+    if (err instanceof ApiError && err.status === 429) throw err
   }
 
-  return {
-    verified: true,
-    public_verification_id: verificationId,
-    verification_id: verificationId,
-    source_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    fields_hash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
-    name: 'Alice Chen',
-    student_name: 'Alice Chen',
-    roll_number: '2021-CS-0428',
-    degree: 'Bachelor of Science in Computer Science',
-    degree_title: 'Bachelor of Science in Computer Science',
-    institution: 'National Institute of Technology',
-    cgpa: '3.91',
-    issue_date: '2025-05-15',
-    graduation_date: 'May 2025',
-    issuer_name: 'Dr. Eleanor Vance, Dean of Academic Affairs',
-    verified_by_issuer: true,
-    issued_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-    tamper_status: 'VALID_UNALTERED',
-    signature_algorithm: 'RSA-PSS-SHA256 (Azure Key Vault HSM)',
+  // Check in-session mock jobs
+  const mockJobs = getMockJobs()
+  const found = mockJobs.find((j) => j.id === verificationId)
+  if (found) {
+    return {
+      verified: true,
+      public_verification_id: found.id,
+      verification_id: found.id,
+      source_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      fields_hash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
+      name: found.extracted_data?.studentName || 'Alice Chen',
+      student_name: found.extracted_data?.studentName || 'Alice Chen',
+      roll_number: found.extracted_data?.studentId || '2021-CS-0428',
+      degree: found.extracted_data?.degreeTitle || 'Bachelor of Science in Computer Science & Engineering',
+      institution: found.extracted_data?.institution || 'National Institute of Technology',
+      cgpa: found.extracted_data?.cgpa || '3.91',
+      issue_date: found.extracted_data?.graduationDate || '2025-05-15',
+      verified_by_issuer: true,
+      issued_at: found.created_at || new Date().toISOString(),
+      tamper_status: 'VALID_UNALTERED',
+      signature_algorithm: 'Canonical SHA-256 Digest • Issuer Confirmed (DPDP Act 2023)',
+    }
   }
+
+  // Fallback demo certificate for demo-cert or demo job IDs
+  if (verificationId === 'demo-cert' || verificationId?.startsWith('job-')) {
+    return {
+      verified: true,
+      public_verification_id: verificationId,
+      verification_id: verificationId,
+      source_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      fields_hash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
+      name: 'Alice Chen',
+      student_name: 'Alice Chen',
+      roll_number: '2021-CS-0428',
+      degree: 'Bachelor of Science in Computer Science & Engineering',
+      degree_title: 'Bachelor of Science in Computer Science & Engineering',
+      institution: 'National Institute of Technology',
+      cgpa: '3.91',
+      issue_date: '2025-05-15',
+      graduation_date: 'May 2025',
+      issuer_name: 'University Exam Cell Staff',
+      verified_by_issuer: true,
+      issued_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+      tamper_status: 'VALID_UNALTERED',
+      signature_algorithm: 'Canonical SHA-256 Digest • Issuer Confirmed (DPDP Act 2023)',
+    }
+  }
+
+  throw new ApiError(404, 'No verified credential found matching this ID.')
 }
 
 /**

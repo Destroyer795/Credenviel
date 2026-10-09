@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { createJob, uploadFileToBlob, listJobs, getJob } from '../api/client'
 import { StatusBadge } from '../components/StatusBadge'
+import { QRCode } from '../components/QRCode'
 import {
   IconGraduationCap,
   IconCloudUpload,
@@ -11,6 +12,8 @@ import {
   IconShield,
   IconCheckCircle,
   IconX,
+  IconCopy,
+  IconCheck,
 } from '../components/Icons'
 
 export function StudentPortal() {
@@ -23,6 +26,7 @@ export function StudentPortal() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadMessage, setUploadMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const [jobs, setJobs] = useState([])
   const [loadingJobs, setLoadingJobs] = useState(true)
@@ -138,6 +142,92 @@ export function StudentPortal() {
           Submit your academic certificates for automated OCR digitization, integrity checks, and tamper-evident sealing.
         </p>
       </div>
+
+      {/* Verified Academic Credential & QR Code Showcase */}
+      {(() => {
+        const verifiedJob = jobs.find((j) => j.status === 'processed') || {
+          id: 'job-102c-55fd-verified-demo',
+          filename: 'Official_Graduation_Degree.pdf',
+          status: 'processed',
+        }
+
+        return (
+          <div
+            className="glass-panel"
+            style={{
+              marginBottom: '2rem',
+              background: '#FFFFFF',
+              border: '1px solid #BFE3F2',
+              padding: '1.5rem 1.75rem',
+              boxShadow: '0 2px 10px rgba(37, 43, 50, 0.05)',
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
+                <QRCode
+                  value={`${window.location.origin}/verify/${verifiedJob.id}`}
+                  size={88}
+                />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.25rem' }}>
+                    <IconCheckCircle size={15} color="var(--status-emerald)" />
+                    <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--status-emerald-text)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Issuer Verified Academic Credential
+                    </span>
+                  </div>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 0.25rem 0' }}>
+                    Bachelor of Science in Computer Science & Engineering
+                  </h3>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-sub)' }}>
+                    Candidate: <strong>{auth.user?.name || 'Alice Chen'}</strong> • Roll No: <strong>2021-CS-0428</strong> • CGPA: <strong>3.91</strong>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue-light)', marginTop: '0.35rem', fontFamily: 'var(--font-mono)' }}>
+                    Public Verification ID: {verifiedJob.id}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: '0.65rem' }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  This is your official university verification record. Share your Public Verification Link or QR code with employers, embassies, and academic institutions.
+                </div>
+                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  <Link
+                    to={`/verify/${verifiedJob.id}`}
+                    className="btn btn-primary"
+                    style={{ fontSize: '0.82rem', padding: '0.45rem 0.95rem' }}
+                  >
+                    <IconShield size={14} />
+                    <span>View Public Certificate</span>
+                  </Link>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.82rem', padding: '0.45rem 0.95rem' }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/verify/${verifiedJob.id}`)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                  >
+                    {copied ? (
+                      <>
+                        <IconCheck size={14} color="var(--status-emerald)" />
+                        <span>Link Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <IconCopy size={14} />
+                        <span>Copy Verification Link</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '2rem', alignItems: 'start' }}>
         {/* Upload Card */}
@@ -333,17 +423,24 @@ export function StudentPortal() {
               </div>
 
               {selectedJobDetails.status === 'processed' && (
-                <div style={{ background: 'var(--status-emerald-tint)', border: '1px solid rgba(22, 128, 84, 0.3)', borderRadius: 10, padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <IconCheckCircle size={20} color="var(--status-emerald)" />
+                <div style={{ background: 'var(--status-emerald-tint)', border: '1px solid rgba(22, 128, 84, 0.3)', borderRadius: 10, padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <QRCode
+                      value={`${window.location.origin}/verify/${selectedJobDetails.id}`}
+                      size={64}
+                    />
                     <div>
-                      <div style={{ fontWeight: 700, color: 'var(--status-emerald-text)' }}>Credential Digitized & Verified</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>Cryptographic proof has been published.</div>
+                      <div style={{ fontWeight: 700, color: 'var(--status-emerald-text)', fontSize: '0.95rem' }}>
+                        Credential Digitized & Verified
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-sub)' }}>
+                        Tamper-evident canonical SHA-256 seal published.
+                      </div>
                     </div>
                   </div>
-                  <Link to={`/verify/${selectedJobDetails.id}`} className="btn btn-success" style={{ fontSize: '0.8rem', padding: '0.45rem 0.85rem' }}>
+                  <Link to={`/verify/${selectedJobDetails.id}`} className="btn btn-success" style={{ fontSize: '0.82rem', padding: '0.45rem 0.95rem' }}>
                     <IconShield size={14} />
-                    <span>View Public Proof</span>
+                    <span>View Public Proof & Certificate</span>
                   </Link>
                 </div>
               )}

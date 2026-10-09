@@ -4,33 +4,35 @@ import { isEntraConfigured, msalInstance, loginRequest } from './msalConfig'
 const AuthContext = createContext(null)
 
 export const DEMO_USERS = {
+  issuer: {
+    oid: 'issuer-oid-examcell',
+    name: 'University Exam Cell',
+    role: 'issuer',
+    email: 'examcell@university.edu',
+    title: 'Exam Cell Staff & Issuer',
+  },
   student: {
     oid: 'student-oid-alice',
     name: 'Alice Chen',
     role: 'student',
     email: 'alice.chen@student.university.edu',
-    title: 'Candidate for B.S. Computer Science',
-  },
-  issuer: {
-    oid: 'issuer-oid-eleanor',
-    name: 'Dr. Eleanor Vance',
-    role: 'issuer',
-    email: 'e.vance@university.edu',
-    title: 'University Dean of Academic Affairs & Registrar',
+    title: 'Student Candidate',
   },
 }
 
 // Generates a mock HS256 / Base64 JWT token for local testing and offline viva presentations
 function createMockJWT(user) {
+  if (!user) return ''
   const header = { alg: 'HS256', typ: 'JWT' }
   const now = Math.floor(Date.now() / 1000)
+  const isBackendIssuer = user.role === 'issuer'
   const payload = {
     oid: user.oid,
     sub: user.oid,
     name: user.name,
     email: user.email,
-    roles: [user.role === 'issuer' ? 'Issuer' : 'Student'],
-    role: user.role === 'issuer' ? 'Issuer' : 'Student',
+    roles: [isBackendIssuer ? 'Issuer' : 'Student'],
+    role: isBackendIssuer ? 'Issuer' : 'Student',
     iat: now,
     exp: now + 86400, // 24h
     iss: 'https://credenviel.local/v2.0',
@@ -45,14 +47,13 @@ function createMockJWT(user) {
 
   const headPart = b64(header)
   const payloadPart = b64(payload)
-  // Standard mock signature part
   const sigPart = 'mock-signature-for-development-and-viva'
 
   return `${headPart}.${payloadPart}.${sigPart}`
 }
 
 export function AuthProvider({ children }) {
-  // Default to student persona for immediate out-of-the-box readiness
+  // Unauthenticated by default for clean institutional landing page
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('credenviel_user')
     if (saved) {
@@ -62,15 +63,23 @@ export function AuthProvider({ children }) {
         // ignore
       }
     }
-    return DEMO_USERS.student
+    return null
   })
 
   const [token, setToken] = useState(() => {
-    return localStorage.getItem('credenviel_token') || createMockJWT(DEMO_USERS.student)
+    const savedTok = localStorage.getItem('credenviel_token')
+    if (savedTok) return savedTok
+    const saved = localStorage.getItem('credenviel_user')
+    if (saved) {
+      try {
+        return createMockJWT(JSON.parse(saved))
+      } catch {}
+    }
+    return ''
   })
 
   const [authMode, setAuthMode] = useState(() => {
-    return isEntraConfigured ? 'entra' : 'demo'
+    return localStorage.getItem('credenviel_user') ? 'college_account' : 'guest'
   })
 
   useEffect(() => {
@@ -79,16 +88,54 @@ export function AuthProvider({ children }) {
       const tok = createMockJWT(user)
       setToken(tok)
       localStorage.setItem('credenviel_token', tok)
+    } else {
+      localStorage.removeItem('credenviel_user')
+      localStorage.removeItem('credenviel_token')
+      setToken('')
     }
   }, [user])
 
+  // Real College Account login and registration
+  const login = ({ name, email, role }) => {
+    const cleanEmail = (email || '').toLowerCase().trim()
+    const cleanName = (name || '').trim() || cleanEmail.split('@')[0] || 'Campus User'
+    const normalizedRole = (role || 'student').toLowerCase() === 'issuer' ? 'issuer' : 'student'
+
+    const titles = {
+      student: 'Student Candidate',
+      issuer: 'Exam Cell Staff & Issuer',
+    }
+
+    const newUser = {
+      oid: cleanEmail,
+      name: cleanName,
+      email: cleanEmail,
+      role: normalizedRole,
+      title: titles[normalizedRole] || 'Campus User',
+    }
+    setUser(newUser)
+    const tok = createMockJWT(newUser)
+    setToken(tok)
+    setAuthMode('college_account')
+    return newUser
+  }
+
+  const logout = () => {
+    localStorage.removeItem('credenviel_user')
+    localStorage.removeItem('credenviel_token')
+    setUser(null)
+    setToken('')
+    setAuthMode('guest')
+  }
+
   // Fast persona switcher for testing and viva presentation
   const switchDemoUser = (roleKey) => {
-    const selected = DEMO_USERS[roleKey] || DEMO_USERS.student
+    const selected = DEMO_USERS[roleKey] || DEMO_USERS.issuer
     setUser(selected)
     const tok = createMockJWT(selected)
     setToken(tok)
     setAuthMode('demo')
+    return selected
   }
 
   // Real Entra ID login via MSAL popup
@@ -121,13 +168,6 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const logout = () => {
-    setUser(null)
-    setToken('')
-    localStorage.removeItem('credenviel_user')
-    localStorage.removeItem('credenviel_token')
-  }
-
   const isStudent = user?.role === 'student'
   const isIssuer = user?.role === 'issuer'
   const isAuthenticated = Boolean(user)
@@ -143,6 +183,7 @@ export function AuthProvider({ children }) {
         isAuthenticated,
         switchDemoUser,
         loginWithEntra,
+        login,
         logout,
         isEntraConfigured,
       }}

@@ -1,23 +1,30 @@
 import React, { useState } from 'react'
-import { NavLink, Link } from 'react-router-dom'
+import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { Logo } from './Logo'
-import { IconMenu, IconX, IconRefresh } from './Icons'
+import { IconMenu, IconX, IconUser, IconLogOut } from './Icons'
+import { AuthModal } from './AuthModal'
 
 export function Navbar() {
-  const { user, isStudent, switchDemoUser, loginWithEntra, isEntraConfigured, authMode } = useAuth()
+  const { user, isStudent, isIssuer, isAuthenticated, logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [modalPreset, setModalPreset] = useState(null)
+  const navigate = useNavigate()
 
-  const handleTogglePersona = () => {
-    if (isStudent) {
-      switchDemoUser('issuer')
-    } else {
-      switchDemoUser('student')
-    }
+  const handleOpenAuth = (preset = null) => {
+    setModalPreset(preset)
+    setAuthModalOpen(true)
   }
 
   const closeMobileMenu = () => {
     setMobileMenuOpen(false)
+  }
+
+  const handleSignOut = () => {
+    logout()
+    closeMobileMenu()
+    navigate('/')
   }
 
   return (
@@ -25,68 +32,91 @@ export function Navbar() {
       <div className="header-container">
         {/* Brand */}
         <Link to="/" className="brand-link" id="nav-brand-logo" onClick={closeMobileMenu}>
-          <Logo size={30} />
+          <Logo size={28} />
           <span className="brand-name">Credenviel</span>
         </Link>
 
-        {/* Center Navigation Segment */}
+        {/* Center Navigation - Sleek, pure text, strictly role-based */}
         <nav className="nav-links" id="main-navigation">
           <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} id="nav-link-home" end>
             Home
           </NavLink>
-          <NavLink to="/student" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} id="nav-link-student">
-            Student
-          </NavLink>
-          <NavLink to="/issuer" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} id="nav-link-issuer" end>
-            Registrar
-          </NavLink>
-          <NavLink to="/issuer/review" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} id="nav-link-review">
-            Review
-          </NavLink>
-          <NavLink to="/verify/demo-cert" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} id="nav-link-verify">
+
+          {isStudent && (
+            <NavLink to="/student" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} id="nav-link-student">
+              My Certificates
+            </NavLink>
+          )}
+
+          {isIssuer && (
+            <>
+              <NavLink to="/issuer" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} id="nav-link-issuer" end>
+                Exam Cell
+              </NavLink>
+              <NavLink to="/issuer/review" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} id="nav-link-review">
+                Review Station
+              </NavLink>
+            </>
+          )}
+
+          <NavLink to="/verify" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} id="nav-link-verify">
             Verify
           </NavLink>
         </nav>
 
-        {/* Right Controls: Unified Persona Switcher */}
+        {/* Right Controls */}
         <div className="user-controls">
-          <div className="persona-switcher" id="persona-switcher-container">
+          {isAuthenticated ? (
+            <div className="nav-user-pill">
+              <div className="nav-user-avatar">
+                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div className="nav-user-info">
+                <span className="nav-user-name">{user.name}</span>
+                <span className={`nav-user-role ${user.role}`}>
+                  {user.role === 'issuer' ? 'Exam Cell' : 'Student'}
+                </span>
+              </div>
+              <button
+                id="btn-sign-out"
+                className="nav-sign-out-btn"
+                onClick={handleSignOut}
+                title="Sign out of account"
+              >
+                <IconLogOut size={14} />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          ) : (
             <button
-              id="btn-toggle-persona"
-              className="persona-switch-btn"
-              onClick={handleTogglePersona}
-              title={`Active as ${user?.role || (isStudent ? 'student' : 'issuer')}. Click to switch persona.`}
+              id="btn-open-auth-modal"
+              className="nav-sign-in-btn"
+              onClick={() => handleOpenAuth(null)}
             >
-              <span className="persona-indicator" />
-              <span className="persona-name">{user?.name || (isStudent ? 'Alice Chen' : 'Registrar Office')}</span>
-              <span className={`persona-role-badge ${isStudent ? 'student' : 'issuer'}`}>
-                {isStudent ? 'Student' : 'Registrar'}
-              </span>
-              <IconRefresh size={12} style={{ color: 'var(--slate-blue)', marginLeft: '2px' }} />
-            </button>
-          </div>
-
-          {isEntraConfigured && authMode !== 'entra' && (
-            <button
-              id="btn-login-entra"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.78rem', padding: '0.38rem 0.75rem' }}
-              onClick={loginWithEntra}
-            >
-              Entra ID
+              Sign In
             </button>
           )}
 
-          {/* Mobile Hamburger Toggle */}
+          {/* Mobile Toggle */}
           <button
             className="mobile-nav-toggle"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle navigation menu"
           >
-            {mobileMenuOpen ? <IconX size={18} /> : <IconMenu size={18} />}
+            {mobileMenuOpen ? <IconX size={20} /> : <IconMenu size={20} />}
           </button>
         </div>
       </div>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        initialPreset={modalPreset}
+        onClose={() => {
+          setAuthModalOpen(false)
+          setModalPreset(null)
+        }}
+      />
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
@@ -99,35 +129,72 @@ export function Navbar() {
           >
             Home
           </NavLink>
+
+          {isStudent && (
+            <NavLink
+              to="/student"
+              className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
+              onClick={closeMobileMenu}
+            >
+              My Certificates
+            </NavLink>
+          )}
+
+          {isIssuer && (
+            <>
+              <NavLink
+                to="/issuer"
+                className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
+                onClick={closeMobileMenu}
+                end
+              >
+                Exam Cell Dashboard
+              </NavLink>
+              <NavLink
+                to="/issuer/review"
+                className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
+                onClick={closeMobileMenu}
+              >
+                Review Station
+              </NavLink>
+            </>
+          )}
+
           <NavLink
-            to="/student"
+            to="/verify"
             className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
             onClick={closeMobileMenu}
           >
-            Student Portal
+            Verify Credential
           </NavLink>
-          <NavLink
-            to="/issuer"
-            className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
-            onClick={closeMobileMenu}
-            end
-          >
-            Registrar Dashboard
-          </NavLink>
-          <NavLink
-            to="/issuer/review"
-            className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
-            onClick={closeMobileMenu}
-          >
-            Review Station
-          </NavLink>
-          <NavLink
-            to="/verify/demo-cert"
-            className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
-            onClick={closeMobileMenu}
-          >
-            Public Verifier
-          </NavLink>
+
+          <div style={{ padding: '1rem', borderTop: '1px solid var(--border-subtle)', marginTop: '0.5rem' }}>
+            {isAuthenticated ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)' }}>
+                  Signed in as <strong>{user.name}</strong> ({user.role === 'issuer' ? 'Exam Cell' : 'Student'})
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', fontSize: '0.85rem' }}
+                  onClick={handleSignOut}
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button
+                className="btn btn-primary"
+                style={{ width: '100%', fontSize: '0.85rem' }}
+                onClick={() => {
+                  closeMobileMenu()
+                  handleOpenAuth(null)
+                }}
+              >
+                Sign In
+              </button>
+            )}
+          </div>
         </div>
       )}
     </header>

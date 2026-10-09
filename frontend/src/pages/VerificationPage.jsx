@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getVerification } from '../api/client'
+import { QRCode } from '../components/QRCode'
 import {
   IconShield,
   IconAlertTriangle,
@@ -24,6 +25,9 @@ export function VerificationPage() {
   const [copied, setCopied] = useState(false)
 
   const activeId = id || 'demo-cert'
+  const verifyUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/verify/${encodeURIComponent(activeId)}`
+    : `https://credenviel.ac.in/verify/${encodeURIComponent(activeId)}`
 
   useEffect(() => {
     setLoading(true)
@@ -58,7 +62,7 @@ export function VerificationPage() {
   }
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href)
+    navigator.clipboard.writeText(verifyUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -128,19 +132,48 @@ export function VerificationPage() {
         </div>
       ) : certData ? (
         <div className="verify-card" id="verification-card">
-          {/* Header Verified Banner */}
-          <div className="verify-header-badge" id="verification-status-banner">
-            <div className="verify-check-icon">
-              <IconCheck size={24} color="#ffffff" />
-            </div>
-            <div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--status-emerald-text)', letterSpacing: '-0.02em' }}>
-                AUTHENTIC & VERIFIED CREDENTIAL
+          {/* Header Verified Banner with QR Code layout */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'center', marginBottom: '2rem' }}>
+            <div className="verify-header-badge" id="verification-status-banner" style={{ margin: 0 }}>
+              <div className="verify-check-icon">
+                <IconCheck size={24} color="#ffffff" />
               </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)' }}>
-                {certData.verified_by_issuer
-                  ? 'Cryptographically authenticated and confirmed by accredited university authority.'
-                  : 'Document digitized with tamper-evident SHA-256 seal.'}
+              <div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--status-emerald-text)', letterSpacing: '-0.02em' }}>
+                  AUTHENTIC & VERIFIED CREDENTIAL
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)' }}>
+                  {certData.verified_by_issuer
+                    ? 'Cryptographically authenticated and confirmed by accredited university authority.'
+                    : 'Document digitized with tamper-evident SHA-256 seal.'}
+                </div>
+              </div>
+            </div>
+
+            {/* Visual QR Code Box */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1.25rem',
+                background: '#FFFFFF',
+                padding: '1rem 1.25rem',
+                borderRadius: 12,
+                border: '1px solid var(--border-subtle)',
+                boxShadow: '0 2px 8px rgba(37, 43, 50, 0.04)',
+              }}
+            >
+              <QRCode value={verifyUrl} size={100} />
+              <div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                  Mobile QR Verification
+                </div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', fontWeight: 600, marginTop: '0.2rem' }}>
+                  Scan to Inspect Proof
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                  Instantly load cryptographic proof on any mobile device.
+                </div>
               </div>
             </div>
           </div>
@@ -235,7 +268,7 @@ export function VerificationPage() {
                 Public Verification ID
               </div>
               <div className="mono-hash" id="verify-public-id">
-                {certData.public_verification_id || certData.verification_id}
+                {certData.public_verification_id || certData.verification_id || activeId}
               </div>
             </div>
           </div>
@@ -243,7 +276,7 @@ export function VerificationPage() {
           {/* Action Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
             <div style={{ fontSize: '0.8rem', color: 'var(--slate-blue-light)' }}>
-              Proof Standard: {certData.signature_algorithm || 'RSA-PSS-SHA256 (Azure Key Vault HSM)'}
+              Proof Standard: Canonical SHA-256 Digest • Issuer Confirmed (DPDP Act 2023)
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>

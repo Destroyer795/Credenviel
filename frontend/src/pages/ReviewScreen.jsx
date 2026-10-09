@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { getReviewDetails, resolveReview, rejectReview, listReviewQueue } from '../api/client'
+import { QRCode } from '../components/QRCode'
 import {
   IconScale,
   IconCheckCircle,
@@ -13,7 +14,242 @@ import {
   IconCheck,
   IconX,
   IconExternalLink,
+  IconSearch,
+  IconRefresh,
 } from '../components/Icons'
+
+/**
+ * Realistic Physical Document Scan Viewer
+ * Used when inspecting physical paper scans, archive documents, or simulated test scans
+ */
+function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1 }) {
+  return (
+    <div
+      style={{
+        transform: `scale(${zoom})`,
+        transformOrigin: 'top center',
+        transition: 'transform 0.15s ease',
+        background: '#FAF6ED',
+        color: '#2C2B29',
+        border: '1px solid #D8CFC0',
+        borderRadius: '4px',
+        padding: '2.5rem 2rem',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.08), inset 0 0 40px rgba(180, 160, 130, 0.12)',
+        maxWidth: '560px',
+        margin: '0 auto',
+        fontFamily: "'Courier New', Courier, monospace",
+        position: 'relative',
+        userSelect: 'none',
+      }}
+    >
+      {/* Stamp watermark */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '25px',
+          border: '2px solid rgba(185, 28, 28, 0.65)',
+          color: 'rgba(185, 28, 28, 0.75)',
+          padding: '0.2rem 0.6rem',
+          fontSize: '0.68rem',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          transform: 'rotate(-6deg)',
+          borderRadius: 3,
+        }}
+      >
+        EXAM CELL ARCHIVE
+      </div>
+
+      {/* University Header */}
+      <div style={{ textAlign: 'center', borderBottom: '2px double #8C8270', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+        <div style={{ fontSize: '0.72rem', letterSpacing: '0.12em', color: '#5A5346', textTransform: 'uppercase' }}>
+          GOVERNMENT OF INDIA • HIGHER EDUCATION ARCHIVES
+        </div>
+        <div style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '0.04em', margin: '0.25rem 0', fontFamily: 'serif', color: '#1E1D1A' }}>
+          NATIONAL INSTITUTE OF TECHNOLOGY
+        </div>
+        <div style={{ fontSize: '0.75rem', fontStyle: 'italic', color: '#685F51' }}>
+          Office of the Registrar & Controller of Examinations
+        </div>
+      </div>
+
+      {/* Certificate Body */}
+      <div style={{ fontSize: '0.82rem', lineHeight: 1.6, textAlign: 'center', marginBottom: '1rem' }}>
+        <p style={{ margin: '0 0 0.5rem 0' }}>This is to certify that the candidate</p>
+        <div
+          style={{
+            fontSize: '1.2rem',
+            fontWeight: 800,
+            textDecoration: 'underline',
+            margin: '0.4rem 0',
+            fontFamily: 'serif',
+            color: '#111827',
+          }}
+        >
+          {formData.name || 'Candidate Name'}
+        </div>
+        <p style={{ margin: '0 0 0.35rem 0' }}>bearing Roll No. <strong>{formData.roll_number || '2021-CS-0428'}</strong> and Reg No. <strong>{formData.register_number || 'REG-987654'}</strong></p>
+        <p style={{ margin: '0 0 0.5rem 0' }}>has fulfilled all curriculum requirements for the award of</p>
+        <div
+          style={{
+            fontSize: '1rem',
+            fontWeight: 700,
+            fontFamily: 'serif',
+            color: '#1F2937',
+            background: 'rgba(230, 220, 195, 0.4)',
+            padding: '0.3rem 0.5rem',
+            margin: '0.4rem 0',
+            borderRadius: 2,
+          }}
+        >
+          {formData.degree || 'Bachelor of Science in Computer Science & Engineering'}
+        </div>
+        <p style={{ margin: '0.5rem 0' }}>
+          Cumulative Grade Point Average (CGPA): <strong>{formData.cgpa || '3.91'}</strong>
+        </p>
+      </div>
+
+      {/* Marks Table Scan */}
+      {formData.marks && formData.marks.length > 0 && (
+        <div style={{ margin: '1rem 0', border: '1px solid #BDB29F', background: '#F5EFE1', padding: '0.6rem', fontSize: '0.72rem' }}>
+          <div style={{ fontWeight: 700, borderBottom: '1px solid #C8BDAB', paddingBottom: '0.2rem', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Official Ledger Grades Summary:
+          </div>
+          {formData.marks.map((m, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.15rem 0', borderBottom: i < formData.marks.length - 1 ? '1px dotted #D2C7B6' : 'none' }}>
+              <span>{m.code || `SUBJ-${i + 1}`} - {m.name}</span>
+              <span>Credits: {m.credits || '4'} | <strong>Grade: {m.grade || 'A'}</strong></span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Footer Signatures and Physical Seal */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '1.75rem', paddingTop: '1rem', borderTop: '1px solid #C8BDAB' }}>
+        <div style={{ textAlign: 'left', fontSize: '0.72rem' }}>
+          <div><strong>Date of Issue:</strong> {formData.issue_date || '2025-05-15'}</div>
+          <div><strong>Ledger Folio:</strong> NIT-CONV-2025/892</div>
+          <div style={{ fontSize: '0.65rem', color: '#786F60', marginTop: '0.25rem' }}>Scan ID: {jobId ? jobId.slice(0, 16) : 'DEMO-ARCHIVE'}</div>
+        </div>
+
+        {/* Physical Blue Stamp / Signature */}
+        <div style={{ textAlign: 'center' }}>
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              border: '2px solid rgba(30, 64, 175, 0.7)',
+              color: 'rgba(30, 64, 175, 0.8)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '0.55rem',
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              margin: '0 auto 0.25rem',
+              transform: 'rotate(-4deg)',
+              background: 'rgba(30, 64, 175, 0.04)',
+            }}
+          >
+            <div>REGISTRAR</div>
+            <div style={{ fontSize: '0.45rem' }}>EXAM CELL</div>
+            <div>SEAL</div>
+          </div>
+          <div style={{ fontSize: '0.7rem', color: '#1E3A8A', fontStyle: 'italic', fontFamily: 'serif' }}>
+            Prof. K. R. Sharma
+          </div>
+          <div style={{ fontSize: '0.65rem', color: '#5A5346' }}>Controller of Examinations</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * High-Density Digital Credential Extracted Preview
+ * Embeds official digital certificate format, live form values, and verifiable QR code
+ */
+function DigitalExtractedPreview({ formData, jobId, verifyUrl }) {
+  return (
+    <div className="certificate-mock-view" style={{ maxWidth: '540px', margin: '0 auto', textAlign: 'center', background: '#FFFFFF', padding: '2.5rem 2rem', border: '8px double #CBD5E1', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+      {/* University Digital Seal */}
+      <div className="cert-seal" style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--text-main)', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+        <IconShield size={22} color="#FFFFFF" />
+      </div>
+
+      <div className="cert-uni-name" style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '0.06em', color: 'var(--text-main)', textTransform: 'uppercase' }}>
+        NATIONAL INSTITUTE OF TECHNOLOGY
+      </div>
+      <div style={{ fontSize: '0.72rem', color: '#64748B', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '1.25rem' }}>
+        Verified Digital Credential • Academic Registry
+      </div>
+
+      <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '0.25rem' }}>
+        This certifies that
+      </div>
+
+      <div className="cert-recipient" style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', borderBottom: '1px dashed #CBD5E1', paddingBottom: '0.4rem', marginBottom: '0.75rem' }}>
+        {formData.name || 'Candidate Name'}
+      </div>
+
+      <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '0.25rem' }}>
+        has successfully completed the prescribed degree curriculum of
+      </div>
+
+      <div className="cert-degree" style={{ fontSize: '1rem', fontWeight: 700, color: '#1E293B', marginBottom: '0.75rem' }}>
+        {formData.degree || 'Degree Program'}
+      </div>
+
+      <div style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '1rem' }}>
+        Cumulative Grade Point Average: <strong>{formData.cgpa || 'N/A'}</strong>
+      </div>
+
+      {/* Extracted Course Marks */}
+      {formData.marks && formData.marks.length > 0 && (
+        <div style={{ textAlign: 'left', margin: '0.85rem 0', background: 'var(--bg-frost)', padding: '0.65rem 0.85rem', borderRadius: 6, fontSize: '0.72rem', color: '#334155' }}>
+          <div style={{ fontWeight: 700, marginBottom: '0.3rem', color: 'var(--text-main)' }}>
+            Verified Course Transcripts ({formData.marks.length} courses):
+          </div>
+          {formData.marks.slice(0, 3).map((m, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted #E2E8F0', padding: '0.2rem 0' }}>
+              <span>{m.code || `Course ${i + 1}`}: {m.name}</span>
+              <strong>Grade: {m.grade}</strong>
+            </div>
+          ))}
+          {formData.marks.length > 3 && (
+            <div style={{ fontSize: '0.68rem', color: '#64748B', textAlign: 'center', marginTop: '0.25rem' }}>
+              + {formData.marks.length - 3} more transcript entries
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Certificate Footer with Live QR Code */}
+      <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1rem', marginTop: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', textAlign: 'left' }}>
+        <div style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: 1.5 }}>
+          <div><strong>Conferred:</strong> {formData.issue_date || 'N/A'}</div>
+          <div><strong>Roll No:</strong> {formData.roll_number || 'N/A'}</div>
+          <div><strong>Reg No:</strong> {formData.register_number || 'N/A'}</div>
+          <div style={{ marginTop: '0.35rem', color: 'var(--status-emerald-text)', fontWeight: 600 }}>
+            • Confirmed by Exam Cell Staff
+          </div>
+        </div>
+
+        {/* Live Verifiable QR Code */}
+        <div style={{ textAlign: 'center', flexShrink: 0 }}>
+          <QRCode value={verifyUrl} size={88} />
+          <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '0.25rem', fontWeight: 600 }}>
+            Scan to Verify
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function ReviewScreen() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -31,7 +267,8 @@ export function ReviewScreen() {
   const [resolvedResult, setResolvedResult] = useState(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('Illegible or corrupted document scan')
-  const [activeViewerTab, setActiveViewerTab] = useState('scan')
+  const [activeViewerTab, setActiveViewerTab] = useState('scan') // 'scan' | 'preview' | 'split'
+  const [zoomLevel, setZoomLevel] = useState(1)
 
   // Form data for extracted record
   const [formData, setFormData] = useState({
@@ -91,9 +328,6 @@ export function ReviewScreen() {
         }
         if (data?.read_sas_url) {
           setReadSasUrl(data.read_sas_url)
-          setActiveViewerTab('scan')
-        } else {
-          setActiveViewerTab('mock')
         }
 
         if (data?.record) {
@@ -197,14 +431,25 @@ export function ReviewScreen() {
     }
   }
 
+  const isImageBlob =
+    readSasUrl &&
+    (/\.(png|jpe?g|webp|gif)($|\?)/i.test(readSasUrl) ||
+      (jobMeta?.filename && /\.(png|jpe?g|webp|gif)$/i.test(jobMeta.filename)))
+
+  const verifyUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/verify/${currentJobId}`
+    : `https://credenviel.ac.in/verify/${currentJobId}`
+
   return (
     <div className="page-container">
       {/* Header with Navigation and Queue Selector */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <Link to="/issuer" className="persona-btn">&larr; Back to Queue</Link>
-            <h1 className="page-title" id="review-screen-title" style={{ fontSize: '1.75rem' }}>
+            <Link to="/issuer" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}>
+              &larr; Exam Cell Queue
+            </Link>
+            <h1 className="page-title" id="review-screen-title" style={{ fontSize: '1.65rem' }}>
               <IconScale size={24} color="var(--slate-blue)" />
               <span>Human-in-the-Loop Review Station</span>
             </h1>
@@ -267,7 +512,7 @@ export function ReviewScreen() {
               <span>View Public Verification Certificate</span>
             </Link>
             <Link to="/issuer" className="btn btn-secondary">
-              Return to Review Queue
+              Return to Exam Cell Queue
             </Link>
           </div>
         </div>
@@ -286,19 +531,21 @@ export function ReviewScreen() {
             Reason: {rejectionReason}
           </div>
           <Link to="/issuer" className="btn btn-secondary">
-            Return to Review Queue
+            Return to Exam Cell Queue
           </Link>
         </div>
       ) : (
         <div className="review-grid">
-          {/* Left Pane: High-Fidelity Document Visual Inspection */}
+          {/* Left Pane: Document Scan & Extracted Preview */}
           <div className="glass-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            {/* Viewer Controls Bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', gap: '0.4rem' }}>
+              {/* Tabs */}
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                 <button
                   type="button"
-                  className={`persona-btn ${activeViewerTab === 'scan' ? 'active' : ''}`}
-                  style={activeViewerTab === 'scan' ? { background: 'var(--slate-blue)', color: '#fff', borderColor: 'var(--slate-blue)' } : {}}
+                  className={`btn ${activeViewerTab === 'scan' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}
                   onClick={() => setActiveViewerTab('scan')}
                 >
                   <IconFileText size={14} />
@@ -306,94 +553,141 @@ export function ReviewScreen() {
                 </button>
                 <button
                   type="button"
-                  className={`persona-btn ${activeViewerTab === 'mock' ? 'active' : ''}`}
-                  style={activeViewerTab === 'mock' ? { background: 'var(--slate-blue)', color: '#fff', borderColor: 'var(--slate-blue)' } : {}}
-                  onClick={() => setActiveViewerTab('mock')}
+                  className={`btn ${activeViewerTab === 'preview' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}
+                  onClick={() => setActiveViewerTab('preview')}
                 >
                   <IconGraduationCap size={14} />
                   <span>Extracted Preview</span>
                 </button>
+                <button
+                  type="button"
+                  className={`btn ${activeViewerTab === 'split' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}
+                  onClick={() => setActiveViewerTab('split')}
+                >
+                  <span>Split View</span>
+                </button>
               </div>
 
-              {readSasUrl && (
-                <a
-                  href={readSasUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: '0.75rem', color: 'var(--soft-blue-dark)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <span>Open Scan in Tab</span>
-                  <IconExternalLink size={12} />
-                </a>
-              )}
+              {/* Zoom & Link Controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {activeViewerTab !== 'preview' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                      onClick={() => setZoomLevel((z) => Math.max(0.7, z - 0.1))}
+                      title="Zoom Out"
+                    >
+                      -
+                    </button>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-sub)', minWidth: '40px', textAlign: 'center' }}>
+                      {(zoomLevel * 100).toFixed(0)}%
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                      onClick={() => setZoomLevel((z) => Math.min(1.6, z + 0.1))}
+                      title="Zoom In"
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}
+                      onClick={() => setZoomLevel(1)}
+                      title="Reset Zoom"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                )}
+
+                {readSasUrl && (
+                  <a
+                    href={readSasUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: '0.75rem', color: 'var(--soft-blue-dark)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem', marginLeft: '0.25rem' }}
+                  >
+                    <span>Open Raw</span>
+                    <IconExternalLink size={12} />
+                  </a>
+                )}
+              </div>
             </div>
 
-            <div className="document-viewer-frame" id="doc-viewer-frame" style={{ flex: 1, padding: activeViewerTab === 'scan' && readSasUrl ? 0 : '1.5rem' }}>
-              {activeViewerTab === 'scan' && readSasUrl ? (
-                <iframe
-                  src={readSasUrl}
-                  title="Original Certificate Document"
-                  style={{ width: '100%', height: '620px', border: 'none', borderRadius: 8, background: '#fff' }}
-                />
-              ) : (
-                <div className="certificate-mock-view">
-                  <div className="cert-seal">
-                    <IconShield size={24} color="#ffffff" />
-                  </div>
-                  <div className="cert-uni-name">
-                    NATIONAL INSTITUTE OF TECHNOLOGY
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                    Office of the University Registrar
-                  </div>
-
-                  <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '1rem' }}>
-                    This is to certify that
-                  </div>
-
-                  <div className="cert-recipient">
-                    {formData.name || 'Candidate Name'}
-                  </div>
-
-                  <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                    has successfully satisfied the requirements for the conferral of
-                  </div>
-
-                  <div className="cert-degree">
-                    {formData.degree || 'Degree Program'}
-                  </div>
-
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.75rem' }}>
-                    Cumulative Grade Point Average: <strong>{formData.cgpa || 'N/A'}</strong>
-                  </div>
-
-                  {formData.marks && formData.marks.length > 0 && (
-                    <div style={{ textAlign: 'left', margin: '0.75rem 0', fontSize: '0.7rem', color: '#475569' }}>
-                      <div style={{ fontWeight: 700, marginBottom: '0.2rem', color: '#334155' }}>Enrolled Courses & Credits:</div>
-                      {formData.marks.slice(0, 3).map((m, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted #e2e8f0', padding: '0.15rem 0' }}>
-                          <span>{m.code || `Course ${i + 1}`}: {m.name}</span>
-                          <strong>Grade: {m.grade}</strong>
-                        </div>
-                      ))}
-                      {formData.marks.length > 3 && (
-                        <div style={{ fontSize: '0.65rem', color: '#94a3b8', textAlign: 'center', marginTop: '0.2rem' }}>
-                          + {formData.marks.length - 3} more course entries
-                        </div>
-                      )}
-                    </div>
+            {/* Viewer Display Frame */}
+            <div
+              className="document-viewer-frame"
+              id="doc-viewer-frame"
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                overflowX: 'auto',
+                maxHeight: '680px',
+                padding: '1rem',
+                background: '#F1F5F9',
+                borderRadius: 8,
+              }}
+            >
+              {activeViewerTab === 'scan' && (
+                <>
+                  {readSasUrl ? (
+                    isImageBlob ? (
+                      <div style={{ textAlign: 'center' }}>
+                        <img
+                          src={readSasUrl}
+                          alt="Scanned Academic Certificate"
+                          style={{
+                            transform: `scale(${zoomLevel})`,
+                            transformOrigin: 'top center',
+                            transition: 'transform 0.15s ease',
+                            maxWidth: '100%',
+                            borderRadius: 4,
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <iframe
+                        src={readSasUrl}
+                        title="Original Certificate Document"
+                        style={{ width: '100%', height: '620px', border: 'none', borderRadius: 8, background: '#fff' }}
+                      />
+                    )
+                  ) : (
+                    <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={zoomLevel} />
                   )}
+                </>
+              )}
 
-                  <div className="cert-footer-meta">
-                    <div>
-                      <strong>Date:</strong> {formData.issue_date || 'N/A'}
+              {activeViewerTab === 'preview' && (
+                <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} />
+              )}
+
+              {activeViewerTab === 'split' && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '0.5rem', textAlign: 'center' }}>
+                      SOURCE DOCUMENT SCAN
                     </div>
-                    <div>
-                      <strong>Roll No:</strong> {formData.roll_number || 'N/A'}
+                    {readSasUrl && isImageBlob ? (
+                      <img src={readSasUrl} alt="Scan" style={{ width: '100%', borderRadius: 6 }} />
+                    ) : (
+                      <PhysicalScanViewer formData={formData} jobId={currentJobId} jobMeta={jobMeta} zoom={0.9} />
+                    )}
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', marginBottom: '0.5rem', textAlign: 'center' }}>
+                      DIGITAL EXTRACTED CREDENTIAL
                     </div>
-                    <div>
-                      <strong>Reg No:</strong> {formData.register_number || 'N/A'}
-                    </div>
+                    <DigitalExtractedPreview formData={formData} jobId={currentJobId} verifyUrl={verifyUrl} />
                   </div>
                 </div>
               )}
@@ -545,7 +839,7 @@ export function ReviewScreen() {
                 </label>
                 <button
                   type="button"
-                  className="persona-btn"
+                  className="btn btn-secondary"
                   style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
                   onClick={handleAddMarkRow}
                 >
@@ -629,7 +923,7 @@ export function ReviewScreen() {
             {/* Reviewer Notes */}
             <div className="form-group">
               <label className="form-label">
-                <span>Registrar Verification Ledger Notes</span>
+                <span>Exam Cell Verification Ledger Notes</span>
               </label>
               <textarea
                 id="input-reviewer-notes"
@@ -640,7 +934,7 @@ export function ReviewScreen() {
               />
             </div>
 
-            {/* Human in the loop decision actions */}
+            {/* Human-in-the-loop decision actions */}
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.75rem', flexWrap: 'wrap' }}>
               <button
                 id="btn-approve-credential"

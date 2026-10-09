@@ -208,7 +208,7 @@ func (d *DB) GetByJobID(ctx context.Context, jobID string) (*records.Record, err
 		&r.CreatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) || strings.Contains(err.Error(), "22P02") {
 			return nil, records.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get record: %w", err)
@@ -262,7 +262,7 @@ func (d *DB) GetByPublicVerificationID(ctx context.Context, publicVerificationID
 		&r.CreatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) || strings.Contains(err.Error(), "22P02") {
 			return nil, records.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get record by verification ID: %w", err)
