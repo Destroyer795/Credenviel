@@ -242,27 +242,21 @@ export async function getVerification(verificationId) {
       }
     }
 
-    // 3. Check if user is logged in as an issuer and can query review details
+    // 3. Fallback: Check if user is logged in as an issuer and can query review details
     try {
-      const savedUser = localStorage.getItem('credenviel_user')
-      if (savedUser) {
-        const user = JSON.parse(savedUser)
-        if (user && user.role === 'issuer') {
-          // Attempt review details query to resolve public_verification_id
-          const revRes = await fetch(`${API_BASE_URL}/api/v1/review/${encodeURIComponent(verificationId)}`, {
-            headers: {
-              Authorization: `Bearer mock-${user.oid || 'examcell'}`
-            }
-          })
-          if (revRes.ok) {
-            const revData = await revRes.json()
-            const pubId = revData?.record?.public_verification_id
-            if (pubId) {
-              saveJobPublicIdMapping(verificationId, pubId)
-              const pubRes = await fetch(`${API_BASE_URL}/api/v1/verify/${encodeURIComponent(pubId)}`)
-              if (pubRes.ok) {
-                return await pubRes.json()
-              }
+      const savedToken = localStorage.getItem('credenviel_token')
+      if (savedToken) {
+        const revRes = await fetch(`${API_BASE_URL}/api/v1/review/${encodeURIComponent(verificationId)}`, {
+          headers: { Authorization: `Bearer ${savedToken}` }
+        })
+        if (revRes.ok) {
+          const revData = await revRes.json()
+          const pubId = revData?.record?.public_verification_id
+          if (pubId) {
+            saveJobPublicIdMapping(verificationId, pubId)
+            const pubRes = await fetch(`${API_BASE_URL}/api/v1/verify/${encodeURIComponent(pubId)}`)
+            if (pubRes.ok) {
+              return await pubRes.json()
             }
           }
         }
