@@ -1,7 +1,8 @@
 // API Client for Credenviel Backend (Production Azure Pipeline)
 
 const CLOUD_API_URL = 'https://ca-api-n2ivlk5gk235i.blackhill-c3a2b095.eastasia.azurecontainerapps.io'
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || CLOUD_API_URL
+const runtimeEnv = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {}
+const API_BASE_URL = runtimeEnv.VITE_API_BASE_URL || CLOUD_API_URL
 
 export class ApiError extends Error {
   constructor(status, message, data = null) {
@@ -9,6 +10,29 @@ export class ApiError extends Error {
     this.status = status
     this.data = data
   }
+}
+
+export function isSasUrlExpired(url) {
+  if (!url || typeof url !== 'string') return true
+
+  try {
+    const parsed = new URL(url)
+    const expiryParam = parsed.searchParams.get('se') || parsed.searchParams.get('st') || parsed.searchParams.get('skt')
+    if (!expiryParam) return true
+
+    const expiryMs = Date.parse(expiryParam)
+    if (Number.isNaN(expiryMs)) return true
+
+    return expiryMs <= Date.now() + 30000
+  } catch {
+    return true
+  }
+}
+
+export function shouldRefreshUploadToken(error, uploadUrl) {
+  if (isSasUrlExpired(uploadUrl)) return true
+
+  return error?.name === 'TypeError' || String(error?.message || '').includes('Failed to fetch')
 }
 
 let backendAvailable = true
@@ -108,6 +132,7 @@ export async function createJob({ filename, contentType, sizeBytes }, authState)
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({
         filename,
         content_type: resolvedContentType,
@@ -147,6 +172,10 @@ export async function uploadFileToBlob(uploadUrl, file, onProgress = null, extra
 
   if (onProgress) {
     onProgress(20)
+  }
+
+  if (isSasUrlExpired(uploadUrl)) {
+    throw new ApiError(401, 'The upload URL is expired. Please request a fresh upload token and retry.')
   }
 
   const response = await fetch(uploadUrl, {

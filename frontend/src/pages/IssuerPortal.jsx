@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { listJobs, createJob, uploadFileToBlob, getJobPublicIdMapping } from '../api/client'
+import { listJobs, createJob, uploadFileToBlob, getJobPublicIdMapping, shouldRefreshUploadToken } from '../api/client'
 import { StatusBadge } from '../components/StatusBadge'
 import {
   IconBuilding,
@@ -88,7 +88,7 @@ export function IssuerPortal() {
 
       try {
         // 1. Create job with issuer token (uploader_is_issuer = true)
-        const jobRes = await createJob(
+        let jobRes = await createJob(
           {
             filename: file.name,
             contentType: file.type || 'application/pdf',
@@ -97,9 +97,25 @@ export function IssuerPortal() {
           auth
         )
 
-        // 2. Upload file to SAS URL
+        // 2. Upload file to SAS URL; if the token is stale, request a fresh one and retry once.
         if (jobRes.upload_url) {
-          await uploadFileToBlob(jobRes.upload_url, file)
+          try {
+            await uploadFileToBlob(jobRes.upload_url, file)
+          } catch (err) {
+            if (shouldRefreshUploadToken(err, jobRes.upload_url)) {
+              jobRes = await createJob(
+                {
+                  filename: file.name,
+                  contentType: file.type || 'application/pdf',
+                  sizeBytes: file.size,
+                },
+                auth
+              )
+              await uploadFileToBlob(jobRes.upload_url, file)
+            } else {
+              throw err
+            }
+          }
         }
 
         successCount++

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { createJob, uploadFileToBlob, listJobs, getJob } from '../api/client'
+import { createJob, uploadFileToBlob, listJobs, getJob, shouldRefreshUploadToken } from '../api/client'
 import { StatusBadge } from '../components/StatusBadge'
 import { QRCode } from '../components/QRCode'
 import {
@@ -94,7 +94,7 @@ export function StudentPortal() {
 
     try {
       // 1. POST /api/v1/jobs to request job and SAS upload URL
-      const jobRes = await createJob(
+      let jobRes = await createJob(
         {
           filename: selectedFile.name,
           contentType: selectedFile.type || 'application/pdf',
@@ -107,9 +107,28 @@ export function StudentPortal() {
       setUploadMessage('Streaming file directly to Azure Blob Storage...')
 
       // 2. PUT bytes directly to Blob SAS URL
-      await uploadFileToBlob(jobRes.upload_url, selectedFile, (p) => {
-        setUploadProgress(p)
-      })
+      try {
+        await uploadFileToBlob(jobRes.upload_url, selectedFile, (p) => {
+          setUploadProgress(p)
+        })
+      } catch (err) {
+        if (shouldRefreshUploadToken(err, jobRes.upload_url)) {
+          setUploadMessage('Upload token expired; requesting a fresh Azure SAS URL...')
+          jobRes = await createJob(
+            {
+              filename: selectedFile.name,
+              contentType: selectedFile.type || 'application/pdf',
+              sizeBytes: selectedFile.size,
+            },
+            auth
+          )
+          await uploadFileToBlob(jobRes.upload_url, selectedFile, (p) => {
+            setUploadProgress(p)
+          })
+        } else {
+          throw err
+        }
+      }
 
       setUploadProgress(100)
       setUploadMessage(`Success: Job ${jobRes.job_id.slice(0, 8)}... created and dispatched to processing queue.`)
