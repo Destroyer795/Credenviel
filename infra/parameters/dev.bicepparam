@@ -7,9 +7,10 @@ param location = 'eastasia'
 param environment = 'dev'
 param apiImageTag = 'latest'
 
-// Browser origins allowed to upload to Blob Storage. Add the deployed frontend origin later.
+// Browser origins allowed to upload to Blob Storage.
 param corsAllowedOrigins = [
   'http://localhost:5173'
+  'https://mango-ground-04b33f300.4.azurestaticapps.net'
 ]
 
 // Your Entra object id, exported in the shell before deploying (never committed):
