@@ -187,7 +187,7 @@ export function VerificationPage() {
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)' }}>
                         {certData.verified_by_issuer
                           ? 'Cryptographically authenticated and confirmed by accredited university authority.'
-                          : 'Document digitized with tamper-evident SHA-256 seal.'}
+                          : 'Uploaded by Student • Digitized with tamper-evident SHA-256 seal.'}
                       </div>
                     </div>
                   </div>
@@ -271,7 +271,7 @@ export function VerificationPage() {
                   <div>
                     <div className="meta-field-label">Institutional Verification</div>
                     <div className="meta-field-value" style={{ color: certData.verified_by_issuer ? 'var(--status-emerald-text)' : 'var(--status-amber-text)' }}>
-                      {certData.verified_by_issuer ? 'Confirmed by University Registrar' : 'Pending Registrar Review'}
+                      {certData.verified_by_issuer ? 'Confirmed by University Registrar' : 'Uploaded by Student'}
                     </div>
                   </div>
 

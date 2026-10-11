@@ -30,6 +30,13 @@ type Job struct {
 	UploaderIsIssuer bool      `json:"uploader_is_issuer"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
+
+	// Enriched metadata from records (when available)
+	Name                 *string `json:"name,omitempty"`
+	RollNumber           *string `json:"roll_number,omitempty"`
+	DocumentType         *string `json:"document_type,omitempty"`
+	VerifiedByIssuer     *bool   `json:"verified_by_issuer,omitempty"`
+	PublicVerificationID *string `json:"public_verification_id,omitempty"`
 }
 
 // ListFilter specifies filters for querying jobs.
@@ -44,4 +51,5 @@ type Repository interface {
 	Create(ctx context.Context, job *Job) error
 	Get(ctx context.Context, id string) (*Job, error)
 	List(ctx context.Context, filter ListFilter) ([]*Job, error)
+	Delete(ctx context.Context, id string) error
 }

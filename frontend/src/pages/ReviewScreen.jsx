@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { getReviewDetails, resolveReview, rejectReview, listReviewQueue, saveJobPublicIdMapping } from '../api/client'
+import { getReviewDetails, resolveReview, rejectReview, listReviewQueue, deleteJob, saveJobPublicIdMapping } from '../api/client'
 import { QRCode } from '../components/QRCode'
 import {
   IconScale,
@@ -17,6 +17,7 @@ import {
   IconSearch,
   IconRefresh,
   IconUpload,
+  IconTrash,
 } from '../components/Icons'
 
 /**
@@ -469,13 +470,18 @@ export function ReviewScreen() {
   const [queue, setQueue] = useState([])
   const [currentJobId, setCurrentJobId] = useState(requestedJobId || '')
   const [jobMeta, setJobMeta] = useState(null)
+  const [recordMeta, setRecordMeta] = useState(null)
   const [readSasUrl, setReadSasUrl] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [actionDone, setActionDone] = useState(null)
+  const [actionDone, setActionDone] = useState(null) // 'approved' | 'rejected' | 'deleted'
   const [resolvedResult, setResolvedResult] = useState(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('Illegible or corrupted document scan')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterTab, setFilterTab] = useState('all') // 'all' | 'pending_approval' | 'needs_review' | 'confirmed'
   const [activeViewerTab, setActiveViewerTab] = useState('scan') // 'scan' | 'preview' | 'split'
   const [zoomLevel, setZoomLevel] = useState(1)
   const [includeMarks, setIncludeMarks] = useState(false)
@@ -502,19 +508,27 @@ export function ReviewScreen() {
     marks: {},
   })
 
-  // Load review queue on mount
-  useEffect(() => {
-    listReviewQueue(auth)
+  // Fetch all documents for review queue
+  const fetchQueue = (selectedIdToKeep = null) => {
+    listReviewQueue({ status: 'all' }, auth)
       .then((q) => {
         if (Array.isArray(q)) {
           setQueue(q)
-          if (!requestedJobId && q.length > 0) {
+          if (selectedIdToKeep) {
+            setCurrentJobId(selectedIdToKeep)
+            setSearchParams({ jobId: selectedIdToKeep })
+          } else if (!requestedJobId && (!currentJobId || !q.some((x) => x.id === currentJobId)) && q.length > 0) {
             setCurrentJobId(q[0].id)
             setSearchParams({ jobId: q[0].id })
           }
         }
       })
       .catch((err) => console.warn('Failed to list review queue:', err))
+  }
+
+  // Load review queue on mount
+  useEffect(() => {
+    fetchQueue()
   }, [auth])
 
   // Fetch job & record details when currentJobId changes
@@ -539,6 +553,7 @@ export function ReviewScreen() {
 
         if (data?.record) {
           const rec = data.record
+          setRecordMeta(rec)
           if (rec.public_verification_id) {
             setPublicVerificationId(rec.public_verification_id)
             saveJobPublicIdMapping(targetId, rec.public_verification_id)
@@ -595,6 +610,7 @@ export function ReviewScreen() {
           }
         } else {
           // If no record exists yet (e.g. queued, awaiting_upload, or failed)
+          setRecordMeta(null)
           setDocumentType('grade_sheet')
           setAttributes([])
           setIncludeMarks(false)
@@ -677,9 +693,13 @@ export function ReviewScreen() {
     setActionDone(null)
   }
 
+  const isPendingStudentApproval =
+    jobMeta?.status === 'processed' && !recordMeta?.verified_by_issuer
+  const canApprove = jobMeta?.status === 'needs_review' || isPendingStudentApproval
+
   const handleApprove = async () => {
-    if (jobMeta?.status !== 'needs_review') {
-      alert(`Approval disabled: this job is currently in "${jobMeta?.status || 'unknown'}" status. Only documents in "needs_review" status require manual human approval.`)
+    if (!canApprove && !recordMeta?.verified_by_issuer) {
+      alert(`Approval disabled: this job is currently in "${jobMeta?.status || 'unknown'}" status.`)
       return
     }
 
@@ -737,12 +757,38 @@ export function ReviewScreen() {
         setPublicVerificationId(res.public_verification_id)
         saveJobPublicIdMapping(currentJobId, res.public_verification_id)
       }
+      setRecordMeta((prev) => ({ ...(prev || {}), verified_by_issuer: true }))
       setActionDone('approved')
+      fetchQueue(currentJobId)
     } catch (err) {
       console.error('Failed to approve review:', err)
       alert(`Approval failed: ${err.message || 'Unknown error'}`)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDeleteDocument = async () => {
+    if (!currentJobId) return
+    setDeleting(true)
+    try {
+      await deleteJob(currentJobId, auth)
+      setShowDeleteModal(false)
+      setActionDone('deleted')
+      const remaining = queue.filter((x) => x.id !== currentJobId)
+      setQueue(remaining)
+      if (remaining.length > 0) {
+        setCurrentJobId(remaining[0].id)
+        setSearchParams({ jobId: remaining[0].id })
+      } else {
+        setCurrentJobId('')
+        setSearchParams({})
+      }
+    } catch (err) {
+      console.error('Failed to delete document:', err)
+      alert(`Removal failed: ${err.message || 'Unknown error'}`)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -783,14 +829,36 @@ export function ReviewScreen() {
     ? `${window.location.origin}/verify/${encodeURIComponent(targetVerifyId)}`
     : `https://credenviel.ac.in/verify/${encodeURIComponent(targetVerifyId || '')}`
 
+  const filteredQueue = queue.filter((item) => {
+    if (filterTab === 'pending_approval') {
+      const isUnverified = item.verified_by_issuer === false || (!item.uploader_is_issuer && !item.verified_by_issuer)
+      if (!isUnverified) return false
+    } else if (filterTab === 'needs_review') {
+      if (item.status !== 'needs_review') return false
+    } else if (filterTab === 'confirmed') {
+      if (item.verified_by_issuer !== true) return false
+    }
+
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase().trim()
+    return (
+      (item.id || '').toLowerCase().includes(q) ||
+      (item.name || '').toLowerCase().includes(q) ||
+      (item.roll_number || '').toLowerCase().includes(q) ||
+      (item.document_type || '').toLowerCase().includes(q) ||
+      (item.blob_key || '').toLowerCase().includes(q) ||
+      (item.status || '').toLowerCase().includes(q)
+    )
+  })
+
   return (
     <div className="page-container">
-      {/* Header with Navigation and Queue Selector */}
+      {/* Header with Navigation and Queue Actions */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <Link to="/issuer" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}>
-              &larr; Exam Cell Queue
+              &larr; Exam Cell Hub
             </Link>
             <h1 className="page-title" id="review-screen-title" style={{ fontSize: '1.65rem' }}>
               <IconScale size={24} color="var(--slate-blue)" />
@@ -798,33 +866,166 @@ export function ReviewScreen() {
             </h1>
           </div>
           <p className="page-subtitle">
-            Inspect raw document scans alongside OCR extracted metadata. Correct anomalies and issue tamper-evident credentials.
+            Inspect raw document scans alongside OCR extracted metadata, approve student-submitted credentials, or remove documents from registry.
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          {queue.length > 1 && (
-            <select
-              className="form-input"
-              style={{ width: 'auto', padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}
-              value={currentJobId}
-              onChange={(e) => handleJobSelect(e.target.value)}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem' }}
+            onClick={() => fetchQueue(currentJobId)}
+            title="Refresh documents list"
+          >
+            <IconRefresh size={14} />
+            <span>Refresh</span>
+          </button>
+
+          {currentJobId && (
+            <button
+              type="button"
+              id="btn-remove-selected-header"
+              className="btn btn-danger"
+              style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem' }}
+              onClick={() => setShowDeleteModal(true)}
+              title="Permanently remove selected document"
             >
-              {queue.map((item) => (
-                <option key={item.id} value={item.id}>
-                  Job: {item.id.slice(0, 12)}... ({item.filename || 'Scan'})
-                </option>
-              ))}
-            </select>
+              <IconTrash size={14} />
+              <span>Remove Document</span>
+            </button>
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>Target Job:</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>Selected ID:</span>
             <code style={{ background: 'var(--bg-frost)', padding: '0.2rem 0.6rem', borderRadius: 6, fontSize: '0.8rem', color: 'var(--slate-blue-dark)', border: '1px solid var(--border-subtle)' }}>
-              {currentJobId ? `${currentJobId.slice(0, 16)}...` : 'None (Queue Clear)'}
+              {currentJobId ? `${currentJobId.slice(0, 16)}...` : 'None'}
             </code>
           </div>
         </div>
+      </div>
+
+      {/* Document Explorer Bar & Live Search */}
+      <div className="glass-panel" style={{ marginBottom: '1.5rem', padding: '1.25rem 1.5rem', background: '#FFFFFF', border: '1px solid var(--border-ice)', borderRadius: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.85rem' }}>
+          <div style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <IconSearch size={16} color="var(--slate-blue)" />
+            <span>Document Directory ({queue.length} Records)</span>
+          </div>
+          <div style={{ fontSize: '0.76rem', color: 'var(--text-sub)' }}>
+            Search student submissions and official university credentials
+          </div>
+        </div>
+
+        {/* Search input & Filter tabs */}
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+          <div style={{ flex: '1 1 280px', position: 'relative' }}>
+            <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
+              <IconSearch size={16} />
+            </div>
+            <input
+              id="input-search-documents"
+              type="text"
+              className="form-input"
+              placeholder="Search by student name, roll number, ID, or file..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingLeft: '2.4rem', fontSize: '0.85rem', width: '100%' }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 4 }}
+              >
+                <IconX size={14} />
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+            {[
+              { id: 'all', label: `All (${queue.length})` },
+              { id: 'pending_approval', label: `Pending Approval (${queue.filter((i) => (i.status === 'processed' && !i.verified_by_issuer) || (!i.uploader_is_issuer && !i.verified_by_issuer)).length})` },
+              { id: 'needs_review', label: `Needs Review (${queue.filter((i) => i.status === 'needs_review').length})` },
+              { id: 'confirmed', label: `Confirmed (${queue.filter((i) => i.verified_by_issuer === true).length})` },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`btn ${filterTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+                onClick={() => setFilterTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Document Cards Scroll Container */}
+        {filteredQueue.length === 0 ? (
+          <div style={{ padding: '1.25rem', textAlign: 'center', background: 'var(--bg-frost)', borderRadius: 8, border: '1px dashed var(--border-soft)', fontSize: '0.82rem', color: 'var(--text-sub)' }}>
+            No documents match your query or filter criteria.
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+            gap: '0.65rem',
+            maxHeight: '220px',
+            overflowY: 'auto',
+            paddingRight: '4px'
+          }}>
+            {filteredQueue.map((item) => {
+              const isSelected = item.id === currentJobId
+              const isConfirmed = item.verified_by_issuer === true
+              const isStudentPending = item.status === 'processed' && !item.verified_by_issuer
+              const isNeedsReview = item.status === 'needs_review'
+              const docName = item.name || (item.blob_key ? item.blob_key.split('/').pop() : 'Document Record')
+              const rollNum = item.roll_number || 'Roll No unextracted'
+              const docTypeLabel = DOCUMENT_TYPE_LABELS[item.document_type] || item.document_type || 'Academic Record'
+
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => handleJobSelect(item.id)}
+                  style={{
+                    padding: '0.75rem 0.9rem',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    background: isSelected ? 'var(--brand-primary-tint, #EFF6FF)' : '#FFFFFF',
+                    border: isSelected ? '2px solid var(--brand-primary, #2563EB)' : '1px solid var(--border-subtle, #E2E8F0)',
+                    boxShadow: isSelected ? '0 2px 8px rgba(37,99,235,0.12)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {docName}
+                    </div>
+                    <span style={{
+                      fontSize: '0.66rem',
+                      fontWeight: 700,
+                      padding: '0.15rem 0.45rem',
+                      borderRadius: 12,
+                      whiteSpace: 'nowrap',
+                      background: isConfirmed ? '#DCFCE7' : isStudentPending ? '#FEF3C7' : isNeedsReview ? '#EDE9FE' : '#F1F5F9',
+                      color: isConfirmed ? '#166534' : isStudentPending ? '#92400E' : isNeedsReview ? '#5B21B6' : '#475569',
+                    }}>
+                      {isConfirmed ? 'Confirmed' : isStudentPending ? 'Student Upload' : isNeedsReview ? 'Needs Review' : item.status}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-sub)', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <span>{rollNum}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>{docTypeLabel}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Post-Action Confirmation States */}
@@ -834,10 +1035,10 @@ export function ReviewScreen() {
             <IconCheck size={32} />
           </div>
           <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-main)' }}>
-            Credential Approved & Cryptographically Sealed
+            Credential Approved &amp; Confirmed by Registrar
           </h2>
           <p style={{ color: 'var(--text-muted)', maxWidth: 600, margin: '0 auto 1.5rem' }}>
-            The certificate for <strong>{formData.name}</strong> has been verified. The canonical SHA-256 hash has been recomputed and anchored in the audit registry.
+            The certificate for <strong>{formData.name}</strong> has been officially confirmed. The verification page now shows <strong>Confirmed by University Registrar</strong>.
           </p>
 
           {resolvedResult?.fields_hash && (
@@ -854,8 +1055,31 @@ export function ReviewScreen() {
               <IconShield size={16} />
               <span>View Public Verification Certificate</span>
             </Link>
+            <button type="button" className="btn btn-primary" onClick={() => setActionDone(null)}>
+              Review / Check Another Document
+            </button>
             <Link to="/issuer" className="btn btn-secondary">
-              Return to Exam Cell Queue
+              Return to Exam Cell Hub
+            </Link>
+          </div>
+        </div>
+      ) : actionDone === 'deleted' ? (
+        <div className="glass-panel" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--status-rose)', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 0 20px rgba(244, 63, 94, 0.4)' }}>
+            <IconTrash size={32} />
+          </div>
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-main)' }}>
+            Document Permanently Removed
+          </h2>
+          <p style={{ color: 'var(--text-muted)', maxWidth: 550, margin: '0 auto 1.5rem' }}>
+            The document record and its cryptographic ledger reference have been deleted from the registry. The public verification URL is now invalidated.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <button type="button" className="btn btn-primary" onClick={() => { setActionDone(null); fetchQueue(); }}>
+              Back to Review Station
+            </button>
+            <Link to="/issuer" className="btn btn-secondary">
+              Return to Exam Cell Hub
             </Link>
           </div>
         </div>
@@ -873,9 +1097,14 @@ export function ReviewScreen() {
           <div style={{ maxWidth: 500, margin: '0 auto 2rem', background: 'var(--status-rose-tint)', padding: '0.75rem 1rem', borderRadius: 8, border: '1px solid rgba(244,63,94,0.3)', fontSize: '0.85rem', color: '#fda4af' }}>
             Reason: {rejectionReason}
           </div>
-          <Link to="/issuer" className="btn btn-secondary">
-            Return to Exam Cell Queue
-          </Link>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <button type="button" className="btn btn-primary" onClick={() => { setActionDone(null); fetchQueue(); }}>
+              Review Another Document
+            </button>
+            <Link to="/issuer" className="btn btn-secondary">
+              Return to Exam Cell Queue
+            </Link>
+          </div>
         </div>
       ) : !currentJobId && queue.length === 0 ? (
         <div className="glass-panel" style={{ textAlign: 'center', padding: '4rem 2rem', background: '#FFFFFF', border: '1px solid var(--border-ice)', borderRadius: '12px' }}>
@@ -895,14 +1124,32 @@ export function ReviewScreen() {
         </div>
       ) : (
         <>
-          {jobMeta && jobMeta.status !== 'needs_review' && (
+          {jobMeta && (
             <div style={{
               marginBottom: '1.25rem',
               padding: '1rem 1.25rem',
               borderRadius: 8,
-              border: jobMeta.status === 'processed' ? '1px solid #86EFAC' : jobMeta.status === 'failed' ? '1px solid #FDA4AF' : '1px solid #FCD34D',
-              background: jobMeta.status === 'processed' ? '#F0FDF4' : jobMeta.status === 'failed' ? '#FFF1F2' : '#FFFBEB',
-              color: jobMeta.status === 'processed' ? '#166534' : jobMeta.status === 'failed' ? '#9F1239' : '#92400E',
+              border: jobMeta.status === 'processed'
+                ? (recordMeta?.verified_by_issuer ? '1px solid #86EFAC' : '1px solid #FCD34D')
+                : jobMeta.status === 'needs_review'
+                ? '1px solid #C4B5FD'
+                : jobMeta.status === 'failed'
+                ? '1px solid #FDA4AF'
+                : '1px solid #CBD5E1',
+              background: jobMeta.status === 'processed'
+                ? (recordMeta?.verified_by_issuer ? '#F0FDF4' : '#FFFBEB')
+                : jobMeta.status === 'needs_review'
+                ? '#F5F3FF'
+                : jobMeta.status === 'failed'
+                ? '#FFF1F2'
+                : '#F8FAFC',
+              color: jobMeta.status === 'processed'
+                ? (recordMeta?.verified_by_issuer ? '#166534' : '#92400E')
+                : jobMeta.status === 'needs_review'
+                ? '#5B21B6'
+                : jobMeta.status === 'failed'
+                ? '#9F1239'
+                : '#334155',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -910,16 +1157,35 @@ export function ReviewScreen() {
               gap: '0.75rem'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                {jobMeta.status === 'processed' ? <IconCheck size={22} color="#166534" /> : <IconAlertTriangle size={22} />}
+                {jobMeta.status === 'processed' && recordMeta?.verified_by_issuer ? (
+                  <IconCheck size={22} color="#166534" />
+                ) : jobMeta.status === 'processed' ? (
+                  <IconAlertTriangle size={22} color="#D97706" />
+                ) : jobMeta.status === 'needs_review' ? (
+                  <IconAlertTriangle size={22} color="#7C3AED" />
+                ) : (
+                  <IconAlertTriangle size={22} />
+                )}
                 <div>
                   <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>
-                    Document Status: {jobMeta.status.toUpperCase()}
+                    {jobMeta.status === 'processed'
+                      ? (recordMeta?.verified_by_issuer ? 'Status: Confirmed by University Registrar' : 'Status: Uploaded by Student (Pending Registrar Confirmation)')
+                      : jobMeta.status === 'needs_review'
+                      ? 'Status: Flagged for Human Review (OCR Low Confidence)'
+                      : `Status: ${jobMeta.status.toUpperCase()}`}
                   </div>
                   <div style={{ fontSize: '0.82rem', marginTop: '0.2rem', lineHeight: 1.4 }}>
-                    {jobMeta.status === 'processed' && 'This credential has already been processed, cryptographically hashed, and issued in the registry. It does not require manual review.'}
-                    {jobMeta.status === 'queued' && 'This document is in the Azure Service Bus processing queue. OCR extraction and confidence scoring are pending worker pickup.'}
-                    {jobMeta.status === 'processing' && 'The worker is currently running OCR extraction, tamper detection, and confidence scoring. Please wait a moment.'}
-                    {jobMeta.status === 'awaiting_upload' && 'This job was created but the document scan file was not received by Azure Blob Storage.'}
+                    {jobMeta.status === 'processed' && recordMeta?.verified_by_issuer && (
+                      'This credential has been officially confirmed by the University Registrar. The public verification page displays "Confirmed by University Registrar".'
+                    )}
+                    {jobMeta.status === 'processed' && !recordMeta?.verified_by_issuer && (
+                      'This document was uploaded by a student and digitized. Click "Approve & Confirm Registrar Verification" below to verify and mark as "Confirmed by University Registrar".'
+                    )}
+                    {jobMeta.status === 'needs_review' && (
+                      'One or more extracted fields fell below the OCR confidence threshold. Please inspect and approve or correct values.'
+                    )}
+                    {jobMeta.status === 'queued' && 'This document is in the processing queue. OCR extraction will run shortly.'}
+                    {jobMeta.status === 'processing' && 'The OCR worker is currently extracting and scoring confidence.'}
                     {jobMeta.status === 'failed' && `Processing failed: ${jobMeta.failure_reason || 'Rejected or unreadable scan'}`}
                   </div>
                 </div>
@@ -929,29 +1195,19 @@ export function ReviewScreen() {
                 {jobMeta.status === 'processed' && (
                   <Link to={`/verify/${publicVerificationId || currentJobId}`} className="btn btn-success" style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}>
                     <IconShield size={14} />
-                    <span>View Public Verification Proof & QR</span>
+                    <span>View Public Proof</span>
                   </Link>
                 )}
-                {(jobMeta.status === 'queued' || jobMeta.status === 'processing') && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}
-                    onClick={() => {
-                      setLoading(true)
-                      getReviewDetails(currentJobId, auth).then(d => {
-                        if (d?.job) setJobMeta(d.job)
-                        if (d?.record?.public_verification_id) {
-                          setPublicVerificationId(d.record.public_verification_id)
-                          saveJobPublicIdMapping(currentJobId, d.record.public_verification_id)
-                        }
-                      }).finally(() => setLoading(false))
-                    }}
-                  >
-                    <IconRefresh size={14} />
-                    <span>Refresh Status</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}
+                  onClick={() => setShowDeleteModal(true)}
+                  title="Remove document from system"
+                >
+                  <IconTrash size={14} />
+                  <span>Remove Document</span>
+                </button>
               </div>
             </div>
           )}
@@ -1609,51 +1865,87 @@ export function ReviewScreen() {
             </div>
 
             {/* Human-in-the-loop decision actions */}
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.75rem', flexWrap: 'wrap' }}>
-              {jobMeta?.status === 'needs_review' ? (
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              {canApprove ? (
                 <>
                   <button
                     id="btn-approve-credential"
                     className="btn btn-success"
-                    style={{ flex: 1 }}
+                    style={{ flex: '1 1 200px' }}
                     disabled={saving || loading}
                     onClick={handleApprove}
                   >
                     <IconCheck size={16} />
-                    <span>{saving ? 'Sealing & Anchoring Proof...' : 'Approve & Issue Certificate'}</span>
+                    <span>
+                      {saving
+                        ? 'Sealing & Anchoring Proof...'
+                        : isPendingStudentApproval
+                        ? 'Approve & Confirm Registrar Verification'
+                        : 'Approve & Issue Certificate'}
+                    </span>
                   </button>
                   <button
                     id="btn-reject-credential"
-                    className="btn btn-danger"
+                    className="btn btn-secondary"
                     disabled={saving || loading}
                     onClick={() => setShowRejectModal(true)}
                   >
                     <IconX size={16} />
                     <span>Reject</span>
                   </button>
+                  <button
+                    id="btn-remove-document-form"
+                    type="button"
+                    className="btn btn-danger"
+                    disabled={saving || loading}
+                    onClick={() => setShowDeleteModal(true)}
+                  >
+                    <IconTrash size={16} />
+                    <span>Remove Document</span>
+                  </button>
                 </>
               ) : jobMeta?.status === 'processed' ? (
-                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <Link
-                    to={`/verify/${publicVerificationId || currentJobId}`}
-                    className="btn btn-success"
-                    style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
-                  >
-                    <IconShield size={16} />
-                    <span>View Public Verification Certificate & QR</span>
-                  </Link>
-                  <div style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-sub)' }}>
-                    This document was already verified and issued. No further approval required.
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ padding: '0.65rem 0.85rem', background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, fontSize: '0.82rem', color: '#166534', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <IconCheckCircle size={16} />
+                    <span>Officially Confirmed by University Registrar</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <Link
+                      to={`/verify/${publicVerificationId || currentJobId}`}
+                      className="btn btn-success"
+                      style={{ flex: '1 1 200px', justifyContent: 'center' }}
+                    >
+                      <IconShield size={16} />
+                      <span>View Public Verification Certificate &amp; QR</span>
+                    </Link>
+                    <button
+                      id="btn-remove-document-form"
+                      type="button"
+                      className="btn btn-danger"
+                      disabled={saving || loading}
+                      onClick={() => setShowDeleteModal(true)}
+                    >
+                      <IconTrash size={16} />
+                      <span>Remove Document</span>
+                    </button>
                   </div>
                 </div>
               ) : (
-                <div style={{ width: '100%', padding: '0.85rem 1rem', background: '#F8FAFC', border: '1px solid var(--border-subtle)', borderRadius: 8, textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-sub)', marginBottom: '0.4rem' }}>
-                    Approval disabled: Job status is <code>{jobMeta?.status || 'unknown'}</code>.
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-sub)' }}>
+                    Document Status: <strong>{jobMeta?.status || 'Unknown'}</strong>
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>
-                    Only jobs in <strong>needs_review</strong> status require human approval.
-                  </div>
+                  <button
+                    id="btn-remove-document-form"
+                    type="button"
+                    className="btn btn-danger"
+                    disabled={saving || loading}
+                    onClick={() => setShowDeleteModal(true)}
+                  >
+                    <IconTrash size={16} />
+                    <span>Remove Document</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -1720,6 +2012,64 @@ export function ReviewScreen() {
                 onClick={handleConfirmReject}
               >
                 {saving ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Document Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', color: '#FDA4AF', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <IconTrash size={20} color="#F43F5E" />
+              <span>Permanently Remove Document</span>
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem', lineHeight: 1.5 }}>
+              Are you sure you want to permanently delete this document from the registry? Even if the document is published, this action will remove the record and invalidate its public verification proof.
+            </p>
+
+            <div style={{ background: 'var(--bg-frost)', padding: '0.85rem 1rem', borderRadius: 8, fontSize: '0.78rem', color: '#334155', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Student Recipient:</span>
+                <strong>{formData.name || 'Not extracted'}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Roll Number:</span>
+                <strong>{formData.roll_number || 'N/A'}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Document Type:</span>
+                <strong>{DOCUMENT_TYPE_LABELS[documentType] || documentType}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Job ID:</span>
+                <code style={{ fontSize: '0.75rem' }}>{currentJobId}</code>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Current Status:</span>
+                <strong style={{ textTransform: 'uppercase' }}>{jobMeta?.status || 'UNKNOWN'}</strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                id="btn-confirm-delete"
+                disabled={deleting}
+                onClick={handleDeleteDocument}
+              >
+                {deleting ? 'Removing Document...' : 'Confirm Permanent Removal'}
               </button>
             </div>
           </div>

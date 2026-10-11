@@ -108,9 +108,11 @@ func (d *DB) Create(ctx context.Context, j *jobs.Job) error {
 // Get fetches a job by ID.
 func (d *DB) Get(ctx context.Context, id string) (*jobs.Job, error) {
 	query := `
-		SELECT id, uploader_id, status, blob_key, failure_reason, uploader_is_issuer, created_at, updated_at
-		FROM jobs
-		WHERE id = $1
+		SELECT j.id, j.uploader_id, j.status, j.blob_key, j.failure_reason, j.uploader_is_issuer, j.created_at, j.updated_at,
+		       r.name, r.roll_number, r.document_type, r.verified_by_issuer, r.public_verification_id::text
+		FROM jobs j
+		LEFT JOIN records r ON r.job_id = j.id
+		WHERE j.id = $1
 	`
 
 	var j jobs.Job
@@ -123,6 +125,11 @@ func (d *DB) Get(ctx context.Context, id string) (*jobs.Job, error) {
 		&j.UploaderIsIssuer,
 		&j.CreatedAt,
 		&j.UpdatedAt,
+		&j.Name,
+		&j.RollNumber,
+		&j.DocumentType,
+		&j.VerifiedByIssuer,
+		&j.PublicVerificationID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -141,22 +148,27 @@ func (d *DB) List(ctx context.Context, filter jobs.ListFilter) ([]*jobs.Job, err
 	argIdx := 1
 
 	if !filter.IsIssuer {
-		conditions = append(conditions, fmt.Sprintf("uploader_id = $%d", argIdx))
+		conditions = append(conditions, fmt.Sprintf("j.uploader_id = $%d", argIdx))
 		args = append(args, filter.UploaderID)
 		argIdx++
 	}
 
 	if filter.Status != "" {
-		conditions = append(conditions, fmt.Sprintf("status = $%d", argIdx))
+		conditions = append(conditions, fmt.Sprintf("j.status = $%d", argIdx))
 		args = append(args, filter.Status)
 		argIdx++
 	}
 
-	query := "SELECT id, uploader_id, status, blob_key, failure_reason, uploader_is_issuer, created_at, updated_at FROM jobs"
+	query := `
+		SELECT j.id, j.uploader_id, j.status, j.blob_key, j.failure_reason, j.uploader_is_issuer, j.created_at, j.updated_at,
+		       r.name, r.roll_number, r.document_type, r.verified_by_issuer, r.public_verification_id::text
+		FROM jobs j
+		LEFT JOIN records r ON r.job_id = j.id
+	`
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY j.created_at DESC"
 
 	rows, err := d.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -176,6 +188,11 @@ func (d *DB) List(ctx context.Context, filter jobs.ListFilter) ([]*jobs.Job, err
 			&j.UploaderIsIssuer,
 			&j.CreatedAt,
 			&j.UpdatedAt,
+			&j.Name,
+			&j.RollNumber,
+			&j.DocumentType,
+			&j.VerifiedByIssuer,
+			&j.PublicVerificationID,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan job row: %w", err)
 		}
@@ -326,7 +343,13 @@ func (d *DB) Resolve(ctx context.Context, jobID string, resolved records.Resolve
 		return fmt.Errorf("failed to lock job: %w", err)
 	}
 
-	if status != "needs_review" {
+	var verifiedByIssuer bool
+	err = tx.QueryRow(ctx, "SELECT verified_by_issuer FROM records WHERE job_id = $1", jobID).Scan(&verifiedByIssuer)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("failed to check record verification status: %w", err)
+	}
+
+	if status != "needs_review" && !(status == "processed" && !verifiedByIssuer) {
 		return records.ErrInvalidStatus
 	}
 
@@ -434,3 +457,29 @@ func (d *DB) Reject(ctx context.Context, jobID string, reason string, reviewerID
 
 	return tx.Commit(ctx)
 }
+
+// Delete removes a job and its associated record.
+func (d *DB) Delete(ctx context.Context, id string) error {
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Delete from records first due to foreign key
+	_, err = tx.Exec(ctx, "DELETE FROM records WHERE job_id = $1", id)
+	if err != nil {
+		return fmt.Errorf("failed to delete record: %w", err)
+	}
+
+	result, err := tx.Exec(ctx, "DELETE FROM jobs WHERE id = $1", id)
+	if err != nil {
+		return fmt.Errorf("failed to delete job: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return jobs.ErrNotFound
+	}
+
+	return tx.Commit(ctx)
+}
+

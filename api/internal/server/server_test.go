@@ -48,10 +48,11 @@ func (m *memoryRecordRepo) Resolve(ctx context.Context, jobID string, resolved r
 	if err != nil {
 		return err
 	}
-	if j.Status != "needs_review" {
+	r, ok := m.records[jobID]
+	isUnverifiedProcessed := j.Status == "processed" && (r == nil || !r.VerifiedByIssuer)
+	if j.Status != "needs_review" && !isUnverifiedProcessed {
 		return records.ErrInvalidStatus
 	}
-	r, ok := m.records[jobID]
 	if !ok {
 		r = &records.Record{JobID: jobID}
 		m.records[jobID] = r
@@ -152,6 +153,14 @@ func (m *memoryJobRepo) List(ctx context.Context, filter jobs.ListFilter) ([]*jo
 		result = append(result, j)
 	}
 	return result, nil
+}
+
+func (m *memoryJobRepo) Delete(ctx context.Context, id string) error {
+	if _, ok := m.jobs[id]; !ok {
+		return jobs.ErrNotFound
+	}
+	delete(m.jobs, id)
+	return nil
 }
 
 type memoryStore struct {
@@ -969,3 +978,93 @@ func TestSignalR_BroadcastOnNotify(t *testing.T) {
 		t.Errorf("unexpected event: %+v", last)
 	}
 }
+
+func TestJobs_Delete(t *testing.T) {
+	s, _, jobRepo, _, _ := setupTestServer()
+
+	jobID := "job-delete-test"
+	jobRepo.jobs[jobID] = &jobs.Job{
+		ID:         jobID,
+		Status:     "processed",
+		UploaderID: "student-1",
+	}
+
+	// 1. Unauthorized student attempts to delete another student's document => 403 Forbidden
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/jobs/"+jobID, nil)
+	req.Header.Set("X-Dev-User", "student-2")
+	req.Header.Set("X-Dev-Role", "student")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for other student deleting, got %d", rec.Code)
+	}
+
+	// 2. Issuer deletes document => 200 OK
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/jobs/"+jobID, nil)
+	req.Header.Set("X-Dev-User", "issuer-1")
+	req.Header.Set("X-Dev-Role", "issuer")
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for issuer deleting, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify deleted from repo
+	if _, ok := jobRepo.jobs[jobID]; ok {
+		t.Errorf("expected job to be deleted from repo")
+	}
+
+	// 3. Deleting non-existent job => 404
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/jobs/"+jobID, nil)
+	req.Header.Set("X-Dev-User", "issuer-1")
+	req.Header.Set("X-Dev-Role", "issuer")
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for deleted job, got %d", rec.Code)
+	}
+}
+
+func TestReview_ApproveStudentProcessedJob(t *testing.T) {
+	s, _, jobRepo, recRepo, _ := setupTestServer()
+
+	jobID := "job-student-proc"
+	jobRepo.jobs[jobID] = &jobs.Job{
+		ID:               jobID,
+		Status:           "processed",
+		UploaderID:       "student-1",
+		UploaderIsIssuer: false,
+	}
+	name := "Rahul Sharma"
+	roll := "AM.EN.U4AIE20001"
+	recRepo.records[jobID] = &records.Record{
+		JobID:                jobID,
+		Name:                 &name,
+		RollNumber:           &roll,
+		VerifiedByIssuer:     false,
+		PublicVerificationID: "pub-student-proc",
+	}
+
+	payload := `{
+		"name": "Rahul Sharma",
+		"roll_number": "AM.EN.U4AIE20001",
+		"degree": "B.Tech Computer Science",
+		"notes": "Verified and approved by university exam cell"
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/review/"+jobID+"/resolve", strings.NewReader(payload))
+	req.Header.Set("X-Dev-User", "issuer-1")
+	req.Header.Set("X-Dev-Role", "issuer")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for approving processed student job, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	savedRec, _ := recRepo.GetByJobID(context.Background(), jobID)
+	if !savedRec.VerifiedByIssuer {
+		t.Errorf("expected verified_by_issuer to be true after exam cell approval")
+	}
+}
+

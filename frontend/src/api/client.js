@@ -415,9 +415,36 @@ export async function rejectReview(jobId, reason, authState) {
 }
 
 /**
- * List all jobs in review queue
- * GET /api/v1/review
+ * List jobs in review queue
+ * GET /api/v1/review?status=...
+ * Supports filter = { status: 'all' } or specific status
  */
-export async function listReviewQueue(authState) {
-  return await fetchWithAuth('/api/v1/review', { method: 'GET' }, authState)
+export async function listReviewQueue(filter = {}, authState) {
+  let actualFilter = filter
+  let actualAuth = authState
+  if (filter && (filter.token !== undefined || filter.currentUser !== undefined)) {
+    actualFilter = {}
+    actualAuth = filter
+  }
+
+  const query = new URLSearchParams()
+  if (actualFilter?.status) {
+    query.set('status', actualFilter.status)
+  }
+
+  const qs = query.toString() ? `?${query.toString()}` : ''
+  return await fetchWithAuth(`/api/v1/review${qs}`, { method: 'GET' }, actualAuth)
 }
+
+/**
+ * Permanently remove/delete a document and associated record
+ * DELETE /api/v1/jobs/{jobId}
+ */
+export async function deleteJob(jobId, authState) {
+  return await fetchWithAuth(
+    `/api/v1/jobs/${encodeURIComponent(jobId)}`,
+    { method: 'DELETE' },
+    authState
+  )
+}
+

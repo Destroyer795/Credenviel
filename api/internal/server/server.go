@@ -174,12 +174,14 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/v1/jobs", authMiddleware(http.HandlerFunc(s.handleCreateJob)))
 	s.mux.Handle("GET /api/v1/jobs", authMiddleware(http.HandlerFunc(s.handleListJobs)))
 	s.mux.Handle("GET /api/v1/jobs/{id}", authMiddleware(http.HandlerFunc(s.handleGetJob)))
+	s.mux.Handle("DELETE /api/v1/jobs/{id}", authMiddleware(http.HandlerFunc(s.handleDeleteJob)))
 
 	// Issuer review routes
 	s.mux.Handle("GET /api/v1/review", authMiddleware(http.HandlerFunc(s.handleListReviewQueue)))
 	s.mux.Handle("GET /api/v1/review/{id}", authMiddleware(http.HandlerFunc(s.handleGetReviewJob)))
 	s.mux.Handle("POST /api/v1/review/{id}/resolve", authMiddleware(http.HandlerFunc(s.handleResolveReview)))
 	s.mux.Handle("POST /api/v1/review/{id}/reject", authMiddleware(http.HandlerFunc(s.handleRejectReview)))
+	s.mux.Handle("DELETE /api/v1/review/{id}", authMiddleware(http.HandlerFunc(s.handleDeleteJob)))
 
 	// SignalR negotiate route (authenticated)
 	s.mux.Handle("POST /api/v1/signalr/negotiate", authMiddleware(http.HandlerFunc(s.handleSignalRNegotiate)))
@@ -463,8 +465,18 @@ func (s *Server) handleListReviewQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	statusParam := r.URL.Query().Get("status")
+	var targetStatus string
+	if statusParam == "all" {
+		targetStatus = ""
+	} else if statusParam != "" {
+		targetStatus = statusParam
+	} else {
+		targetStatus = "needs_review"
+	}
+
 	filter := jobs.ListFilter{
-		Status:   "needs_review",
+		Status:   targetStatus,
 		IsIssuer: true,
 	}
 	list, err := s.jobRepo.List(r.Context(), filter)
@@ -658,13 +670,71 @@ func (s *Server) handleResolveReview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var pubID string
+	if existingRecord != nil {
+		pubID = existingRecord.PublicVerificationID
+	}
+	if pubID == "" {
+		if rec, err := s.recordRepo.GetByJobID(r.Context(), jobID); err == nil && rec != nil {
+			pubID = rec.PublicVerificationID
+		}
+	}
+
 	resp := map[string]any{
-		"status":      "processed",
-		"job_id":      jobID,
-		"fields_hash": fieldsHash,
+		"status":                 "processed",
+		"job_id":                 jobID,
+		"fields_hash":            fieldsHash,
+		"public_verification_id": pubID,
+		"verified_by_issuer":     true,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleDeleteJob(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	jobID := r.PathValue("id")
+	if jobID == "" {
+		http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
+		return
+	}
+
+	job, err := s.jobRepo.Get(r.Context(), jobID)
+	if err != nil {
+		if errors.Is(err, jobs.ErrNotFound) {
+			http.Error(w, `{"error":"not_found","message":"job not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"internal_server_error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Issuers can delete any job; students can only delete their own
+	if user.Role != "issuer" && job.UploaderID != user.ID {
+		http.Error(w, `{"error":"forbidden","message":"insufficient permissions to delete this document"}`, http.StatusForbidden)
+		return
+	}
+
+	if err := s.jobRepo.Delete(r.Context(), jobID); err != nil {
+		if errors.Is(err, jobs.ErrNotFound) {
+			http.Error(w, `{"error":"not_found","message":"job not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"internal_server_error","message":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status": "deleted",
+		"job_id": jobID,
+	})
 }
 
 type rejectReviewRequest struct {
