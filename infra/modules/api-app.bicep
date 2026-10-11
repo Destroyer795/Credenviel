@@ -104,22 +104,35 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
         allowInsecure: false
         corsPolicy: {
           allowedOrigins: [
-            '*'
+            'https://mango-ground-04b33f300.4.azurestaticapps.net'
+            'http://localhost:5173'
+            'http://127.0.0.1:5173'
           ]
           allowedMethods: [
             'GET'
             'POST'
             'PUT'
-            'PATCH'
             'DELETE'
             'OPTIONS'
+            'HEAD'
           ]
           allowedHeaders: [
             'Authorization'
             'Content-Type'
+            'Accept'
+            'X-Demo-Account'
+            'X-Dev-User'
+            'X-Dev-Role'
+            'X-Dev-Name'
+            'X-User-Role'
+            'X-User-ID'
+            'X-User-Name'
             'X-Internal-Key'
+            'X-Internal-Secret'
             'x-ms-blob-type'
           ]
+          allowCredentials: true
+          maxAge: 86400
         }
       }
       registries: !empty(registryPassword) ? [
