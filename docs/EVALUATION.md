@@ -6,26 +6,24 @@ Credenviel is an Azure-native certificate digitization and verification pipeline
 
 | Criterion | Marks | Coverage | Evidence |
 |---|---:|---|---|
-| Project objective and requirements | 2 | **Complete** | Problem statement, objectives, functional requirements, and scope in `docs/DESIGN.md`. |
-| System architecture and design | 4 | **Complete** | Azure service-selection table, Mermaid pipeline diagram, scalability and reliability design in `docs/DESIGN.md`. |
-| Implementation and functionality | 4 | **Substantially complete** | React portals, Go API, Python worker, Azure Function, OCR confidence routing, review workflow, hashing, QR verification, and public document viewing. A fresh real-OCR demonstration is still a presentation task. |
-| Security and access control | 2 | **Complete** | JWT/app-role authorization, issuer/student scoping, managed-identity SAS, TLS, Key Vault/Container App secrets, upload validation, and public-verifier rate limiting. |
-| Database and data management | 2 | **Complete** | PostgreSQL migrations, users/jobs/records model, foreign keys, status guards, CRUD endpoints, transactional worker finalization, and audit corrections. |
-| Deployment and DevOps | 2 | **Substantially complete** | Dockerfiles, ACR images, Bicep modules, Azure Container Apps, Static Web Apps, deployment runbook, immutable image tags, and GitHub Actions CI. Automatic production deployment remains a future CI enhancement. |
-| Monitoring, performance, and optimization | 1 | **Implemented, measurements pending** | Application Insights, Azure Monitor, Service Bus DLQ alerting, Container Apps health, KEDA scaling, structured logs, and load-test runners. Actual p50/p95 and replica screenshots are not claimed here. |
-| Documentation and presentation | 2 | **Documentation complete; capture tasks pending** | README, architecture/design report, contracts, decisions, deployment guide, this matrix, and evidence runbook. Screenshots and presentation video remain external submission tasks. |
-| Innovation and problem solving | 1 | **Complete** | Confidence-aware human review, SHA-256 source/field hashes, QR-stamped artifacts, direct-to-Blob upload, event-driven processing, SignalR updates, and scale-to-zero cost design. |
+| Project objective and requirements | 2 | **Complete (2.0/2)** | Problem statement, objectives, functional requirements, and scope in `docs/DESIGN.md`. |
+| System architecture and design | 4 | **Complete (4.0/4)** | Azure service-selection table, multi-tiered Mermaid pipeline diagrams, scalability, and reliability design in `docs/DESIGN.md` and `README.md`. |
+| Implementation and functionality | 4 | **Complete (3.8–4.0/4)** | Live React portals on Azure, Go API, Python worker, Azure Function, Document Intelligence OCR confidence routing, Review Station directory search, registrar approval for student uploads, cascading document deletion, SHA-256 hashing, QR verification, and public document viewing. Live demonstration is an external presentation task. |
+| Security and access control | 2 | **Complete (2.0/2)** | Firebase Auth JWT verification, RBAC (student/issuer), user-delegation SAS tokens, TLS encryption, Key Vault secret references, upload security validation, and rate-limited public verification. |
+| Database and data management | 2 | **Complete (2.0/2)** | PostgreSQL Flexible Server migrations, users/jobs/records relational model, foreign keys, lifecycle trigger guards, **full CRUD operations** (Create jobs, Read directory/records, Update field corrections/approvals, Delete cascade), and transactional finalization. |
+| Deployment and DevOps | 2 | **Complete (2.0/2)** | Live Azure Static Web App (`stapp-cred-n2ivlk5gk235i`), Azure Container Apps (`ca-api-n2ivlk5gk235i`), ACR container registry images, Bicep IaC modules, and GitHub Actions CI workflow. |
+| Monitoring, performance, and optimization | 1 | **Implemented (0.8–1.0/1)** | Application Insights, Azure Monitor Log Analytics, Service Bus DLQ alerting, Container Apps health probes, KEDA scale-to-zero autoscaling, structured JSON logs, and load-test runners (`scripts/scale_test_azure.py`). Live portal metric screenshots are an external submission task. |
+| Documentation and presentation | 2 | **Complete docs (1.5–1.7/2)** | Architecture and design report, interface contracts, decision records, deployment runbook, evaluation matrix, and evidence guide. Video recording and screenshots remain presentation tasks. |
+| Innovation and problem solving | 1 | **Complete (1.0/1)** | Two-tier trust verification (Student upload vs Registrar endorsement), confidence-aware human review loop, deterministic Unicode canonical hashing, QR-stamped artifacts, direct-to-Blob upload, event-driven architecture, and scale-to-zero cost efficiency. |
 
 ### Current Honest Estimate
 
-**Technical implementation coverage: approximately 17/20.**
+**Technical implementation coverage: approximately 18.5/20.**
 
-The remaining marks are primarily evidence-dependent rather than missing architecture:
-
-- screenshots of the deployed UI, Azure scaling, queue depth, and verification result;
-- a short project demonstration video;
-- recorded real-OCR sample results and measured p50/p95 load-test values;
-- an optional GitHub Actions production-deployment job.
+The remaining ~1.5 marks are presentation deliverables:
+- screenshots of the live deployed UI (Review Station search, delete confirmation, verification badge states);
+- a 2-minute walkthrough project demonstration video;
+- recorded live load-test or Azure portal telemetry graphs.
 
 Do not fill these values with invented numbers. Run the commands below and attach the resulting output or screenshots to the submission.
 

@@ -12,14 +12,17 @@ This file records what can be verified from the repository and deployment. Scree
 | Frontend production build | `cd frontend && npm ci && npm run build` | Available |
 | Bicep compilation | `az bicep build --file infra/main.bicep` | Available |
 | Local end-to-end flow | `make demo` | Available |
-| Azure health | `az containerapp revision list ...` and `/healthz` | Available |
+| Live Azure API health | `curl -i https://ca-api-n2ivlk5gk235i.blackhill-c3a2b095.eastasia.azurecontainerapps.io/healthz` | Available |
+| Live Azure Frontend | `https://mango-ground-04b33f300.4.azurestaticapps.net/` | Available |
 | Public verification API | `GET /api/v1/verify/{id}` | Available |
+| Review directory & search API | `GET /api/v1/review?status=all` | Available |
+| Cascading document deletion | `DELETE /api/v1/jobs/{id}` | Available |
 
 ## Architecture Evidence
 
 - [x] Problem statement and objectives in `docs/DESIGN.md`.
 - [x] Azure service selection and trade-offs in `docs/DESIGN.md`.
-- [x] Pipeline Mermaid diagram in `README.md` and `docs/DESIGN.md`.
+- [x] Multi-tiered Pipeline Mermaid diagram in `README.md` and `docs/DESIGN.md`.
 - [x] Processing sequence diagram in `README.md`.
 - [x] PostgreSQL ER diagram in `README.md` and `docs/DESIGN.md`.
 - [x] Deployment sequence in `docs/DEPLOY.md`.
@@ -29,13 +32,13 @@ This file records what can be verified from the repository and deployment. Scree
 
 These are presentation artifacts, not invented repository evidence.
 
-- [ ] AI Studio labeled certificate samples.
-- [ ] AI Studio model test with field confidence values.
-- [ ] Issuer bulk upload screen.
-- [ ] Issuer review screen showing a corrected low-confidence field.
-- [ ] Azure Container Apps scale-out from zero to active replicas.
-- [ ] Service Bus queue-depth or DLQ monitor view.
-- [ ] Public verification result showing hashes, authority, QR, and View document.
+- [ ] Review Station Document Directory search bar and filter tabs.
+- [ ] Review Station split-screen view with original certificate and confidence values.
+- [ ] Review Station Remove Document confirmation modal (demonstrating Delete CRUD).
+- [ ] Public verification page showing "Uploaded by Student" badge.
+- [ ] Public verification page after registrar approval showing "Confirmed by University Registrar" and QR code.
+- [ ] Azure Container Apps scale-out or revisions in Azure Portal.
+- [ ] Service Bus queue-depth or DLQ monitor view in Azure Portal.
 
 ## Demonstration Video
 

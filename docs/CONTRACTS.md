@@ -176,11 +176,12 @@ The JIT user provisioning executes identically using these claims.
 | `POST` | `/api/v1/jobs/bulk` | Bulk upload initialization (returns batch of job IDs and SAS tokens) |
 | `GET` | `/api/v1/jobs` | List all jobs across institution with status filtering |
 | `GET` | `/api/v1/jobs/:id` | Get details for any job |
-| `GET` | `/api/v1/review` | List all jobs with status `needs_review` |
+| `GET` | `/api/v1/review` | List jobs with status `needs_review`, or all documents when `?status=all` is passed for Document Directory search |
 | `GET` | `/api/v1/review/:jobId` | Fetch job metadata, extracted record fields, and temporary `read_sas_url` for side-by-side preview |
-| `POST` | `/api/v1/review/:jobId/resolve` | Resolve review; accepts confirmed/corrected fields, records audit in `corrections_json`, updates status to `processed` |
+| `POST` | `/api/v1/review/:jobId/resolve` | Resolve review or approve student uploads; records audit in `corrections_json`, sets `verified_by_issuer=true`, updates status to `processed` |
 | `POST` | `/api/v1/review/:jobId/reject` | Reject submission; accepts `{ "rejection_reason": "string" }`, updates status to `failed`, notifies student via SignalR |
-| `DELETE` | `/api/v1/jobs/:id` | Administrative deletion upon student GDPR/data request |
+| `DELETE` | `/api/v1/jobs/:id` | Permanent administrative deletion; cascades transactional removal from `records` then `jobs` |
+| `DELETE` | `/api/v1/review/:id` | Permanent document deletion alias callable from the Review Station |
 
 ### Internal Endpoints (Worker → API, internal virtual network only)
 
@@ -297,7 +298,7 @@ The `fields_hash` is an immutable SHA-256 digest of the **canonical JSON** repre
 | `issue_date` | ✅ Yes | Date of certificate issuance |
 | `source_hash` | ✅ Yes | SHA-256 of original scan |
 | `fields_hash` | ✅ Yes | Canonical SHA-256 of extracted fields |
-| `verified_by_issuer` | ✅ Yes | Issuer verification confirmation badge |
+| `verified_by_issuer` | ✅ Yes | Institutional endorsement badge: `false` = **"Uploaded by Student"**; `true` = **"Confirmed by University Registrar"** |
 | `marks_json` (full subject marks) | ❌ **No** | Privacy protection — detailed transcript marks are not public |
 | `register_number` | ❌ **No** | University private registration identifier |
 | `confidence_json` | ❌ **No** | Pipeline internal OCR metrics |

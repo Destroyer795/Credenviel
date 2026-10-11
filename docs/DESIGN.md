@@ -54,56 +54,95 @@ The pipeline uses Azure-native services chosen for one property each: direct-to-
 ### Pipeline Diagram
 
 ```mermaid
-flowchart LR
-    subgraph Frontend
-        A[React App<br/>Entra-authenticated]
+flowchart TB
+    %% Client Tier
+    subgraph ClientTier ["1. Presentation & Verifier Tier (Azure Static Web Apps)"]
+        direction LR
+        StudentApp["🎓 Student Portal<br/>• Self-Service Document Upload<br/>• Real-Time Processing Status"]
+        ReviewApp["🏛️ Exam Cell Review Station<br/>• Searchable Document Directory<br/>• Split-Screen OCR Inspection<br/>• Registrar Approval & Document Deletion"]
+        VerifyApp["🔍 Public Verification Page<br/>• QR Scanner & Proof Seal<br/>• Temporary Document Viewer"]
     end
 
-    subgraph "Go API (Container Apps)"
-        B[Create Job<br/>Issue SAS Token]
+    subgraph AuthTier ["Identity & Access Control"]
+        FirebaseAuth["🔐 Firebase Authentication<br/>• Google OAuth & Email/Password<br/>• Roles: student | issuer"]
     end
 
-    subgraph "Azure Blob Storage"
-        C[raw-upload container]
+    %% Ingestion & API Gateway Tier
+    subgraph APITier ["2. API Gateway & Management (Azure Container Apps)"]
+        direction TB
+        GoAPI["⚡ Go REST API Service<br/>• Auth Middleware & JIT User Upsert<br/>• User-Delegation Write SAS Signer<br/>• Full CRUD Endpoints & Cascade Delete<br/>• Rate-Limited Public Verifier (/verify/:id)"]
     end
 
-    subgraph "Event Grid + Function"
-        D[Validate blob<br/>Update status to queued<br/>Enqueue to Service Bus]
+    %% Storage & Event Triggers
+    subgraph IngestionPipeline ["3. Direct Storage Ingestion & Event Pipeline"]
+        direction TB
+        RawUploads[("📦 Azure Blob Storage<br/>Container: raw-uploads<br/>• Private Container, Direct Client PUT")]
+        EventGrid["⚡ Azure Event Grid<br/>• System Topic: Microsoft.Storage<br/>• Event: BlobCreated"]
+        AzFunction["⚙️ Azure Function (Python)<br/>• MIME & Magic Byte Validation<br/>• State Transition: awaiting_upload ➔ queued"]
     end
 
-    subgraph "Service Bus"
-        E[Job Queue<br/>Dead-letter Queue]
+    %% Async Decoupling & Serverless Workers
+    subgraph ComputeTier ["4. Asynchronous Queue & Auto-Scaling (KEDA)"]
+        direction TB
+        ServiceBus["📬 Azure Service Bus<br/>• Queue: job-processing<br/>• Dead-Letter Queue (DLQ) for Poison Messages"]
+        KEDA["📈 KEDA Metric Autoscaler<br/>• Scales Workers 0 ➔ N from Queue Depth<br/>• Scale-to-Zero on Idle"]
+        Worker["🐍 Python Processing Worker<br/>(Azure Container Apps)"]
     end
 
-    subgraph "Container Apps Workers (KEDA)"
-        F[Python Worker<br/>0→N replicas]
+    %% AI Extraction & Cryptography
+    subgraph ExtractionCrypto ["5. AI Extraction & Cryptographic Sealing"]
+        direction TB
+        DocIntel["🧠 Azure AI Document Intelligence<br/>• Custom & Prebuilt Models<br/>• Per-Field & Per-Cell Confidence Scores"]
+        CryptoEngine["🔒 Cryptographic Engine<br/>• Canonical Unicode NFC Normalization<br/>• SHA-256 Source & Fields Hash<br/>• QR-Stamped Verification PDF"]
+        StampedDocs[("📜 Azure Blob Storage<br/>Container: stamped-documents<br/>• QR Stamped Certificate PDFs")]
     end
 
-    subgraph "Document Intelligence"
-        G[Custom-trained model<br/>Per-field confidence]
+    %% Persistence & Live Updates
+    subgraph DataTier ["6. Persistence, Secrets & Real-Time Telemetry"]
+        direction TB
+        Postgres[("🐘 Azure PostgreSQL Flexible Server<br/>• Tables: users, jobs, records<br/>• Trigger Guards: trg_jobs_status_guard")]
+        KeyVault["🔑 Azure Key Vault<br/>• Managed Identity Secret Injection"]
+        SignalR["📡 Azure SignalR Service<br/>• Live Job Status Broadcast to Frontend"]
     end
 
-    subgraph "PostgreSQL"
-        H[(users, jobs, records)]
-    end
+    %% Workflows
+    ClientTier -.->|Authenticate| FirebaseAuth
+    FirebaseAuth -.->|Bearer JWT Token| GoAPI
 
-    subgraph "Verification"
-        I[Public page<br/>QR + hash lookup]
-    end
+    %% 1. Upload Flow
+    StudentApp -->|1. Request Upload SAS| GoAPI
+    ReviewApp -->|1. Request Upload SAS| GoAPI
+    GoAPI -->|2. Generate 15-min PUT SAS| ClientTier
+    ClientTier -->|3. Direct PUT Upload| RawUploads
 
-    A -->|1. Request upload| B
-    B -->|2. Create job row| H
-    B -->|SAS token| A
-    A -->|3. Direct upload| C
-    C -->|4. blob-created event| D
-    D -->|Update status| H
-    D -->|5. Enqueue job_id| E
-    E -->|6. KEDA scales| F
-    F -->|7. Send blob| G
-    G -->|Structured fields + confidence| F
-    F -->|8. Write record, hashes, flag| H
-    F -->|10. SignalR push| B
-    H -->|9. Lookup| I
+    %% 2. Ingestion Flow
+    RawUploads -->|4. BlobCreated Event| EventGrid
+    EventGrid -->|5. Push Event| AzFunction
+    AzFunction -->|6. Set Status: queued| Postgres
+    AzFunction -->|7. Enqueue {job_id}| ServiceBus
+
+    %% 3. Worker Processing Flow
+    ServiceBus -->|Queue Depth Metric| KEDA
+    KEDA -.->|Scale 0 ➔ N Replicas| Worker
+    ServiceBus -->|8. Peek-Lock Message| Worker
+    Worker -->|9. Extract Certificate Data| DocIntel
+    DocIntel -->|Fields & Confidence Scores| Worker
+    Worker -->|10. Compute SHA-256 & Stamp QR| CryptoEngine
+    CryptoEngine -->|Store Stamped PDF| StampedDocs
+    Worker -->|11. ACID Record & Status Finalization| Postgres
+    Worker -->|12. Notify API| GoAPI
+    GoAPI -->|13. Push Status Update| SignalR
+    SignalR -.->|Live WebSocket Refresh| StudentApp
+    SignalR -.->|Live WebSocket Refresh| ReviewApp
+
+    %% 4. Review & Approval Flow
+    ReviewApp -->|14. Inspect, Search Directory, Approve/Delete| GoAPI
+    GoAPI -->|Promote to 'Confirmed by Registrar' / Cascade Delete| Postgres
+
+    %% 5. Public Verification Flow
+    VerifyApp -->|15. Scan QR / Fetch Verification ID| GoAPI
+    GoAPI -->|Retrieve Seal, Hashes & 15-min Read SAS| Postgres
+    GoAPI -->|Verify Proof & Display Document| VerifyApp
 ```
 
 The queue absorbs the burst so workers can scale from zero without dropping uploads, and every processed record carries a SHA-256 hash checkable via its QR code.
@@ -155,7 +194,7 @@ Each job carries a status: `awaiting_upload`, `queued`, `processing`, `processed
 
 Ten steps take a document from upload to a verifiable record.
 
-1. **Request.** Issuer or student logs in via React (Entra-authenticated) and calls the Go API to start an upload.
+1. **Request.** Issuer or student logs in via React (Firebase-authenticated) and calls the Go API to start an upload.
 
 2. **Create job.** The API creates an `awaiting_upload` job row in PostgreSQL first — recording the uploader and whether they are the issuer — then issues a SAS token scoped to a blob path that embeds the job ID.
 
@@ -171,9 +210,15 @@ Ten steps take a document from upload to a verifiable record.
 
 8. **Write, hash, and flag.** The worker writes the extracted fields to PostgreSQL; computes a SHA-256 hash of the original source file and a second hash of the normalized extracted fields; and sets status to `processed`, or `needs_review` if any field's confidence falls below threshold. `verified_by_issuer` is set `true` automatically for issuer uploads, and stays `false` for student uploads until an issuer confirms them on the review screen.
 
-9. **Verify.** A QR-stamped copy is generated for printing; the QR encodes the record's random `public_verification_id`, not a sequential ID. The public verification page looks up that ID and shows both hashes, the key extracted fields, and the `verified_by_issuer` status, so even a fresh re-scan of a genuine certificate can be confirmed field-for-field.
+9. **Verify.** A QR-stamped copy is generated for printing; the QR encodes the record's random `public_verification_id`, not a sequential ID. The public verification page looks up that ID and shows both hashes, the key extracted fields, and the `verified_by_issuer` status:
+   - When `false`: displayed as **"Uploaded by Student"** (digitized with tamper-evident seal).
+   - When `true`: displayed as **"Confirmed by University Registrar"** (accredited institutional endorsement).
 
 10. **Live update.** The worker calls an internal API endpoint after each write; the API pushes the status to the uploader's own SignalR group via the Service's REST API (there's no official Go SDK), so the dashboard updates without polling.
+
+11. **Review Station, Search & Approval.** The Exam Cell can search the complete document registry by student name, roll number, document classification, or ID. Officers inspect scans side-by-side with confidence breakdowns, correct sub-threshold fields (immutably logged in `corrections_json`), and approve student uploads to promote them to "Confirmed by University Registrar".
+
+12. **Permanent Document Removal.** An administrative deletion endpoint (`DELETE /api/v1/jobs/:id`) performs transactional cascading removal from PostgreSQL `records` and `jobs`, permanently revoking invalid or erroneous credentials.
 
 > `needs_review` and `verified_by_issuer` answer different questions: one flags OCR uncertainty, the other flags whether the issuer has vouched for the document's authenticity. A student upload can be high-confidence OCR and still unverified until an issuer confirms it.
 
