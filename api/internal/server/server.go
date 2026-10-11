@@ -813,6 +813,25 @@ func (s *Server) handlePublicVerify(w http.ResponseWriter, r *http.Request) {
 	rec, err := s.recordRepo.GetByPublicVerificationID(r.Context(), publicID)
 	if err != nil {
 		if errors.Is(err, records.ErrNotFound) {
+			// Check if it's a rejected job queried by ID
+			if job, jobErr := s.jobRepo.Get(r.Context(), publicID); jobErr == nil && job != nil && job.Status == "failed" {
+				reason := "Document submission was rejected by the university registrar"
+				if job.FailureReason != nil && *job.FailureReason != "" {
+					reason = *job.FailureReason
+				}
+				resp := records.PublicVerification{
+					Verified:             false,
+					Status:               "rejected",
+					RejectionReason:      reason,
+					FailureReason:        reason,
+					PublicVerificationID: job.ID,
+					IssuedAt:             job.CreatedAt,
+					IssuingAuthority:     s.cfg.IssuingAuthority,
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
 			http.Error(w, `{"error":"not_found","message":"verification record not found"}`, http.StatusNotFound)
 			return
 		}
@@ -820,8 +839,31 @@ func (s *Server) handlePublicVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Detect if this record belongs to a failed/rejected job
+	rejectionReason := rec.FailureReason
+	isRejected := rec.Status == "failed"
+	if rec.CorrectionsJSON != nil {
+		if corrMap, ok := rec.CorrectionsJSON.(map[string]any); ok {
+			if rReason, ok := corrMap["rejection_reason"].(string); ok && rReason != "" {
+				isRejected = true
+				if rejectionReason == "" {
+					rejectionReason = rReason
+				}
+			}
+		}
+	}
+	// Also cross-check with job if status is not explicitly marked on record
+	if !isRejected && rec.JobID != "" {
+		if job, jobErr := s.jobRepo.Get(r.Context(), rec.JobID); jobErr == nil && job != nil && job.Status == "failed" {
+			isRejected = true
+			if rejectionReason == "" && job.FailureReason != nil {
+				rejectionReason = *job.FailureReason
+			}
+		}
+	}
+
 	var stampedURL string
-	if s.readSigner != nil && rec.JobID != "" {
+	if s.readSigner != nil && rec.JobID != "" && !isRejected {
 		stampedKey := fmt.Sprintf("stamped-documents/%s/stamped_certificate.pdf", rec.JobID)
 		stampedURL, _ = s.readSigner.SignRead(stampedKey, 15*time.Minute)
 	}
@@ -833,8 +875,21 @@ func (s *Server) handlePublicVerify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	verifiedByIssuer := rec.VerifiedByIssuer
+	if isRejected {
+		verifiedByIssuer = false
+	}
+
+	status := rec.Status
+	if isRejected {
+		status = "rejected"
+	}
+
 	resp := records.PublicVerification{
-		Verified:             true,
+		Verified:             !isRejected,
+		Status:               status,
+		RejectionReason:      rejectionReason,
+		FailureReason:        rejectionReason,
 		PublicVerificationID: rec.PublicVerificationID,
 		Name:                 rec.Name,
 		RollNumber:           rec.RollNumber,
@@ -845,7 +900,7 @@ func (s *Server) handlePublicVerify(w http.ResponseWriter, r *http.Request) {
 		AttributesJSON:       rec.AttributesJSON,
 		SourceHash:           rec.SourceHash,
 		FieldsHash:           rec.FieldsHash,
-		VerifiedByIssuer:     rec.VerifiedByIssuer,
+		VerifiedByIssuer:     verifiedByIssuer,
 		IssuedAt:             rec.CreatedAt,
 		IssuingAuthority:     s.cfg.IssuingAuthority,
 		DocumentURL:          documentURL,

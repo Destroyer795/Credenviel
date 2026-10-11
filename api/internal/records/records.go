@@ -15,6 +15,8 @@ var (
 type Record struct {
 	ID                   string     `json:"id"`
 	JobID                string     `json:"job_id"`
+	Status               string     `json:"status,omitempty"`
+	FailureReason        string     `json:"failure_reason,omitempty"`
 	Name                 *string    `json:"name"`
 	RollNumber           *string    `json:"roll_number"`
 	RegisterNumber       *string    `json:"register_number"`
@@ -52,6 +54,9 @@ type ResolvedFields struct {
 // Note: private marks_json and register_number are strictly excluded per design specification.
 type PublicVerification struct {
 	Verified             bool      `json:"verified"`
+	Status               string    `json:"status,omitempty"`
+	RejectionReason      string    `json:"rejection_reason,omitempty"`
+	FailureReason        string    `json:"failure_reason,omitempty"`
 	PublicVerificationID string    `json:"public_verification_id"`
 	Name                 *string   `json:"name"`
 	RollNumber           *string   `json:"roll_number"`

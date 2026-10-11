@@ -32,11 +32,31 @@ func New(ctx context.Context, dsn string) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Ensure flexible document columns exist
+	// Ensure flexible document columns exist and status guard permits processed -> failed rejection
 	_, _ = pool.Exec(ctx, `
 		ALTER TABLE records ADD COLUMN IF NOT EXISTS document_type TEXT NOT NULL DEFAULT 'grade_sheet';
 		ALTER TABLE records ADD COLUMN IF NOT EXISTS attributes_json JSONB NOT NULL DEFAULT '{}'::jsonb;
 		CREATE INDEX IF NOT EXISTS idx_records_document_type ON records(document_type);
+
+		CREATE OR REPLACE FUNCTION check_status_transition()
+		RETURNS TRIGGER AS $$
+		BEGIN
+		    IF NEW.status = OLD.status THEN
+		        RETURN NEW;
+		    END IF;
+
+		    IF (OLD.status = 'awaiting_upload' AND NEW.status IN ('queued', 'failed')) OR
+		       (OLD.status = 'queued' AND NEW.status IN ('processing', 'failed')) OR
+		       (OLD.status = 'processing' AND NEW.status IN ('processed', 'needs_review', 'failed')) OR
+		       (OLD.status = 'needs_review' AND NEW.status IN ('processed', 'failed')) OR
+		       (OLD.status = 'processed' AND NEW.status = 'failed') THEN
+		        RETURN NEW;
+		    END IF;
+
+		    RAISE EXCEPTION 'invalid status transition from % to %', OLD.status, NEW.status
+		        USING ERRCODE = 'check_violation';
+		END;
+		$$ LANGUAGE plpgsql;
 	`)
 
 	return &DB{pool: pool}, nil
@@ -209,13 +229,15 @@ func (d *DB) List(ctx context.Context, filter jobs.ListFilter) ([]*jobs.Job, err
 // GetByJobID fetches the record associated with a job.
 func (d *DB) GetByJobID(ctx context.Context, jobID string) (*records.Record, error) {
 	query := `
-		SELECT id, job_id, name, roll_number, register_number, degree,
-		       marks_json, cgpa::text, issue_date::text, confidence_json,
-		       source_hash, fields_hash, public_verification_id, verified_by_issuer,
-		       reviewed_by, reviewed_at, corrections_json, created_at,
-		       coalesce(document_type, 'grade_sheet'), coalesce(attributes_json, '{}'::jsonb)
-		FROM records
-		WHERE job_id = $1
+		SELECT r.id, r.job_id, r.name, r.roll_number, r.register_number, r.degree,
+		       r.marks_json, r.cgpa::text, r.issue_date::text, r.confidence_json,
+		       r.source_hash, r.fields_hash, r.public_verification_id, r.verified_by_issuer,
+		       r.reviewed_by, r.reviewed_at, r.corrections_json, r.created_at,
+		       coalesce(r.document_type, 'grade_sheet'), coalesce(r.attributes_json, '{}'::jsonb),
+		       coalesce(j.status, 'processed'), coalesce(j.failure_reason, '')
+		FROM records r
+		LEFT JOIN jobs j ON r.job_id = j.id
+		WHERE r.job_id = $1
 	`
 
 	var r records.Record
@@ -242,6 +264,8 @@ func (d *DB) GetByJobID(ctx context.Context, jobID string) (*records.Record, err
 		&r.CreatedAt,
 		&r.DocumentType,
 		&attrBytes,
+		&r.Status,
+		&r.FailureReason,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || strings.Contains(err.Error(), "22P02") {
@@ -266,16 +290,18 @@ func (d *DB) GetByJobID(ctx context.Context, jobID string) (*records.Record, err
 	return &r, nil
 }
 
-// GetByPublicVerificationID fetches a record by its public verification ID.
+// GetByPublicVerificationID fetches a record by its public verification ID or job ID.
 func (d *DB) GetByPublicVerificationID(ctx context.Context, publicVerificationID string) (*records.Record, error) {
 	query := `
-		SELECT id, job_id, name, roll_number, register_number, degree,
-		       marks_json, cgpa::text, issue_date::text, confidence_json,
-		       source_hash, fields_hash, public_verification_id, verified_by_issuer,
-		       reviewed_by, reviewed_at, corrections_json, created_at,
-		       coalesce(document_type, 'grade_sheet'), coalesce(attributes_json, '{}'::jsonb)
-		FROM records
-		WHERE public_verification_id = $1 OR job_id = $1
+		SELECT r.id, r.job_id, r.name, r.roll_number, r.register_number, r.degree,
+		       r.marks_json, r.cgpa::text, r.issue_date::text, r.confidence_json,
+		       r.source_hash, r.fields_hash, r.public_verification_id, r.verified_by_issuer,
+		       r.reviewed_by, r.reviewed_at, r.corrections_json, r.created_at,
+		       coalesce(r.document_type, 'grade_sheet'), coalesce(r.attributes_json, '{}'::jsonb),
+		       coalesce(j.status, 'processed'), coalesce(j.failure_reason, '')
+		FROM records r
+		LEFT JOIN jobs j ON r.job_id = j.id
+		WHERE r.public_verification_id = $1 OR r.job_id = $1
 	`
 
 	var r records.Record
@@ -302,6 +328,8 @@ func (d *DB) GetByPublicVerificationID(ctx context.Context, publicVerificationID
 		&r.CreatedAt,
 		&r.DocumentType,
 		&attrBytes,
+		&r.Status,
+		&r.FailureReason,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || strings.Contains(err.Error(), "22P02") {
@@ -430,7 +458,10 @@ func (d *DB) Reject(ctx context.Context, jobID string, reason string, reviewerID
 		return fmt.Errorf("failed to lock job: %w", err)
 	}
 
-	if status != "needs_review" {
+	var verifiedByIssuer bool
+	_ = tx.QueryRow(ctx, "SELECT verified_by_issuer FROM records WHERE job_id = $1", jobID).Scan(&verifiedByIssuer)
+
+	if status != "needs_review" && !(status == "processed" && !verifiedByIssuer) {
 		return records.ErrInvalidStatus
 	}
 
@@ -448,7 +479,8 @@ func (d *DB) Reject(ctx context.Context, jobID string, reason string, reviewerID
 
 	updateRecordQuery := `
 		UPDATE records
-		SET reviewed_by = $2,
+		SET verified_by_issuer = false,
+		    reviewed_by = $2,
 		    reviewed_at = clock_timestamp(),
 		    corrections_json = coalesce(corrections_json, '{}'::jsonb) || $3::jsonb
 		WHERE job_id = $1

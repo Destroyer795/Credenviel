@@ -793,8 +793,10 @@ export function ReviewScreen() {
   }
 
 
+  const canReject = jobMeta?.status === 'needs_review' || isPendingStudentApproval
+
   const handleConfirmReject = async () => {
-    if (jobMeta?.status !== 'needs_review') {
+    if (!canReject) {
       alert(`Rejection disabled: this job is currently in "${jobMeta?.status || 'unknown'}" status.`)
       return
     }
@@ -804,6 +806,7 @@ export function ReviewScreen() {
       await rejectReview(currentJobId, rejectionReason, auth)
       setShowRejectModal(false)
       setActionDone('rejected')
+      fetchQueue(currentJobId)
     } catch (err) {
       console.error('Failed to reject review:', err)
       alert(`Rejection failed: ${err.message || 'Unknown error'}`)

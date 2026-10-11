@@ -154,6 +154,9 @@ export function VerificationPage() {
         <div className="verify-card" id="verification-card">
           {/* Header Verified Banner with QR Code layout */}
           {(() => {
+            const isRejected = certData?.status === 'rejected' || certData?.status === 'failed' || certData?.verified === false
+            const rejectionReason = certData?.rejection_reason || certData?.failure_reason || ''
+
             const docType = certData?.document_type || 'grade_sheet'
             const isTC = docType === 'transfer_certificate'
             const isBonafide = docType === 'bonafide_certificate'
@@ -161,7 +164,9 @@ export function VerificationPage() {
             const isDegree = docType === 'degree_certificate'
             const isGradeSheet = docType === 'grade_sheet'
 
-            const bannerTitle = isTC
+            const bannerTitle = isRejected
+              ? 'DOCUMENT SUBMISSION REJECTED'
+              : isTC
               ? 'AUTHENTIC & VERIFIED TRANSFER CERTIFICATE'
               : isBonafide
               ? 'AUTHENTIC & VERIFIED BONAFIDE CERTIFICATE'
@@ -176,16 +181,48 @@ export function VerificationPage() {
             return (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'center', marginBottom: '2rem' }}>
-                  <div className="verify-header-badge" id="verification-status-banner" style={{ margin: 0 }}>
-                    <div className="verify-check-icon">
-                      <IconCheck size={24} color="#ffffff" />
+                  <div
+                    className="verify-header-badge"
+                    id="verification-status-banner"
+                    style={{
+                      margin: 0,
+                      background: isRejected ? 'var(--status-rose-tint)' : undefined,
+                      borderColor: isRejected ? 'rgba(201, 59, 78, 0.35)' : undefined,
+                    }}
+                  >
+                    <div
+                      className="verify-check-icon"
+                      style={{
+                        background: isRejected ? 'var(--status-rose)' : undefined,
+                        boxShadow: isRejected ? '0 2px 10px rgba(201, 59, 78, 0.35)' : undefined,
+                      }}
+                    >
+                      {isRejected ? (
+                        <IconXCircle size={24} color="#ffffff" />
+                      ) : (
+                        <IconCheck size={24} color="#ffffff" />
+                      )}
                     </div>
                     <div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--status-emerald-text)', letterSpacing: '-0.02em' }}>
+                      <div
+                        style={{
+                          fontSize: '1.25rem',
+                          fontWeight: 800,
+                          color: isRejected ? 'var(--status-rose-text)' : 'var(--status-emerald-text)',
+                          letterSpacing: '-0.02em',
+                        }}
+                      >
                         {bannerTitle}
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-sub)' }}>
-                        {certData.verified_by_issuer
+                      <div
+                        style={{
+                          fontSize: '0.85rem',
+                          color: isRejected ? 'var(--status-rose-text)' : 'var(--text-sub)',
+                        }}
+                      >
+                        {isRejected
+                          ? (rejectionReason ? `Rejected by University Authority: ${rejectionReason}` : 'Document rejected by university authority. Invalid credential.')
+                          : certData.verified_by_issuer
                           ? 'Cryptographically authenticated and confirmed by accredited university authority.'
                           : 'Uploaded by Student • Digitized with tamper-evident SHA-256 seal.'}
                       </div>
@@ -201,38 +238,65 @@ export function VerificationPage() {
                       background: '#FFFFFF',
                       padding: '1rem 1.25rem',
                       borderRadius: 12,
-                      border: '1px solid var(--border-subtle)',
+                      border: isRejected ? '1px solid rgba(201, 59, 78, 0.3)' : '1px solid var(--border-subtle)',
                       boxShadow: '0 2px 8px rgba(37, 43, 50, 0.04)',
                     }}
                   >
                     <QRCode value={verifyUrl} size={100} />
                     <div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--slate-blue)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
-                        Mobile QR Verification
+                      <div style={{ fontSize: '0.74rem', color: isRejected ? 'var(--status-rose)' : 'var(--slate-blue)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                        {isRejected ? 'Revocation Status' : 'Mobile QR Verification'}
                       </div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', fontWeight: 600, marginTop: '0.2rem' }}>
-                        Scan to Inspect Proof
+                      <div style={{ fontSize: '0.82rem', color: isRejected ? 'var(--status-rose-text)' : 'var(--text-main)', fontWeight: 600, marginTop: '0.2rem' }}>
+                        {isRejected ? 'Status: REJECTED' : 'Scan to Inspect Proof'}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                        Instantly load cryptographic proof on any mobile device.
+                        {isRejected ? 'Public verification confirms this document is rejected and revoked.' : 'Instantly load cryptographic proof on any mobile device.'}
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Explicit Rejection Alert if Rejected */}
+                {isRejected && rejectionReason && (
+                  <div
+                    id="verification-rejection-alert"
+                    style={{
+                      marginBottom: '1.5rem',
+                      background: 'var(--status-rose-tint)',
+                      border: '1px solid rgba(201, 59, 78, 0.3)',
+                      borderRadius: 10,
+                      padding: '1rem 1.25rem',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <IconAlertTriangle size={20} color="var(--status-rose)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <div>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--status-rose)', letterSpacing: '0.04em' }}>
+                        Official Rejection Reason
+                      </div>
+                      <div style={{ fontSize: '0.92rem', color: 'var(--status-rose-text)', fontWeight: 600, marginTop: '0.2rem' }}>
+                        {rejectionReason}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Credential Metadata */}
                 <div className="meta-grid">
                   <div>
                     <div className="meta-field-label">Student Recipient</div>
                     <div className="meta-field-value" id="verify-recipient-name">
-                      {certData.name || certData.student_name}
+                      {certData.name || certData.student_name || 'N/A'}
                     </div>
                   </div>
 
                   <div>
                     <div className="meta-field-label">Roll Number</div>
                     <div className="meta-field-value" id="verify-roll-number">
-                      {certData.roll_number || 'Official Ledger ID'}
+                      {certData.roll_number || 'N/A'}
                     </div>
                   </div>
 
@@ -264,21 +328,43 @@ export function VerificationPage() {
                   <div>
                     <div className="meta-field-label">Conferral / Issue Date</div>
                     <div className="meta-field-value" id="verify-grad-date">
-                      {certData.issue_date || certData.graduation_date}
+                      {certData.issue_date || certData.graduation_date || 'N/A'}
                     </div>
                   </div>
 
                   <div>
                     <div className="meta-field-label">Institutional Verification</div>
-                    <div className="meta-field-value" style={{ color: certData.verified_by_issuer ? 'var(--status-emerald-text)' : 'var(--status-amber-text)' }}>
-                      {certData.verified_by_issuer ? 'Confirmed by University Registrar' : 'Uploaded by Student'}
+                    <div
+                      className="meta-field-value"
+                      id="verify-institutional-status"
+                      style={{
+                        color: isRejected
+                          ? 'var(--status-rose-text)'
+                          : certData.verified_by_issuer
+                          ? 'var(--status-emerald-text)'
+                          : 'var(--status-amber-text)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {isRejected
+                        ? 'Rejected by University Authority'
+                        : certData.verified_by_issuer
+                        ? 'Confirmed by University Registrar'
+                        : 'Uploaded by Student'}
                     </div>
                   </div>
 
                   <div>
                     <div className="meta-field-label">Tamper-Proof Audit Status</div>
-                    <div className="meta-field-value" style={{ color: 'var(--status-emerald-text)' }}>
-                      {certData.tamper_status || 'VALID_UNALTERED'}
+                    <div
+                      className="meta-field-value"
+                      id="verify-audit-status"
+                      style={{
+                        color: isRejected ? 'var(--status-rose-text)' : 'var(--status-emerald-text)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {isRejected ? 'REJECTED / INVALIDATED' : (certData.tamper_status || 'VALID_UNALTERED')}
                     </div>
                   </div>
                 </div>
@@ -329,7 +415,7 @@ export function VerificationPage() {
                 Raw Source Document SHA-256 Digest
               </div>
               <div className="mono-hash" id="verify-document-hash">
-                {certData.source_hash || certData.document_hash}
+                {certData.source_hash || certData.document_hash || 'DOCUMENT_NOT_INDEXED'}
               </div>
             </div>
 
@@ -345,12 +431,19 @@ export function VerificationPage() {
 
           {/* Action Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div style={{ fontSize: '0.8rem', color: 'var(--slate-blue-light)' }}>
-              Proof Standard: Canonical SHA-256 Digest • Issuer Confirmed (DPDP Act 2023)
-            </div>
+            {(() => {
+              const isRejected = certData?.status === 'rejected' || certData?.status === 'failed' || certData?.verified === false
+              return (
+                <div style={{ fontSize: '0.8rem', color: isRejected ? 'var(--status-rose-text)' : 'var(--slate-blue-light)', fontWeight: isRejected ? 700 : 400 }}>
+                  {isRejected
+                    ? 'Status: Rejected & Revoked by University Authority (Invalid Credential)'
+                    : 'Proof Standard: Canonical SHA-256 Digest • Issuer Confirmed (DPDP Act 2023)'}
+                </div>
+              )
+            })()}
 
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              {(certData.document_url || certData.stamped_document_url) && (
+              {(certData.document_url || certData.stamped_document_url) && certData.verified !== false && certData.status !== 'rejected' && (
                 <a
                   href={certData.document_url || certData.stamped_document_url}
                   target="_blank"
@@ -381,15 +474,17 @@ export function VerificationPage() {
                   </>
                 )}
               </button>
-              <button
-                id="btn-print-certificate"
-                className="btn btn-secondary"
-                style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
-                onClick={handlePrint}
-              >
-                <IconPrinter size={15} />
-                <span>Print Certificate</span>
-              </button>
+              {certData.verified !== false && certData.status !== 'rejected' && (
+                <button
+                  id="btn-print-certificate"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                  onClick={handlePrint}
+                >
+                  <IconPrinter size={15} />
+                  <span>Print Certificate</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

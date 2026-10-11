@@ -31,12 +31,28 @@ func (m *memoryRecordRepo) GetByJobID(ctx context.Context, jobID string) (*recor
 	if !ok {
 		return nil, records.ErrNotFound
 	}
+	if m.jobRepo != nil {
+		if j, err := m.jobRepo.Get(ctx, jobID); err == nil && j != nil {
+			r.Status = j.Status
+			if j.FailureReason != nil {
+				r.FailureReason = *j.FailureReason
+			}
+		}
+	}
 	return r, nil
 }
 
 func (m *memoryRecordRepo) GetByPublicVerificationID(ctx context.Context, publicVerificationID string) (*records.Record, error) {
 	for _, r := range m.records {
-		if r.PublicVerificationID == publicVerificationID {
+		if r.PublicVerificationID == publicVerificationID || r.JobID == publicVerificationID {
+			if m.jobRepo != nil {
+				if j, err := m.jobRepo.Get(ctx, r.JobID); err == nil && j != nil {
+					r.Status = j.Status
+					if j.FailureReason != nil {
+						r.FailureReason = *j.FailureReason
+					}
+				}
+			}
 			return r, nil
 		}
 	}
@@ -80,14 +96,18 @@ func (m *memoryRecordRepo) Reject(ctx context.Context, jobID string, reason stri
 	if err != nil {
 		return err
 	}
-	if j.Status != "needs_review" {
+	r, ok := m.records[jobID]
+	isUnverifiedProcessed := j.Status == "processed" && (r == nil || !r.VerifiedByIssuer)
+	if j.Status != "needs_review" && !isUnverifiedProcessed {
 		return records.ErrInvalidStatus
 	}
 	j.Status = "failed"
 	j.FailureReason = &reason
 
-	r, ok := m.records[jobID]
 	if ok {
+		r.Status = "failed"
+		r.FailureReason = reason
+		r.VerifiedByIssuer = false
 		r.ReviewedBy = &reviewerID
 		now := time.Now().UTC()
 		r.ReviewedAt = &now
@@ -1067,4 +1087,91 @@ func TestReview_ApproveStudentProcessedJob(t *testing.T) {
 		t.Errorf("expected verified_by_issuer to be true after exam cell approval")
 	}
 }
+
+func TestReview_RejectAndVerify(t *testing.T) {
+	s, _, jobRepo, recRepo, _ := setupTestServer()
+
+	jobID := "job-reject-test"
+	pubID := "pub-reject-test"
+	jobRepo.jobs[jobID] = &jobs.Job{
+		ID:               jobID,
+		Status:           "processed",
+		UploaderID:       "student-1",
+		UploaderIsIssuer: false,
+	}
+	name := "Ananya Roy"
+	roll := "AM.EN.U4CSE21005"
+	recRepo.records[jobID] = &records.Record{
+		JobID:                jobID,
+		Name:                 &name,
+		RollNumber:           &roll,
+		VerifiedByIssuer:     false,
+		PublicVerificationID: pubID,
+	}
+
+	// 1. Exam cell rejects the document
+	rejectPayload := `{"rejection_reason":"Marks mismatch with university records. Fake document."}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/review/"+jobID+"/reject", strings.NewReader(rejectPayload))
+	req.Header.Set("X-Dev-User", "issuer-1")
+	req.Header.Set("X-Dev-Role", "issuer")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for rejection, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 2. Public verification by publicVerificationID
+	reqVerifyPub := httptest.NewRequest(http.MethodGet, "/api/v1/verify/"+pubID, nil)
+	recVerifyPub := httptest.NewRecorder()
+	s.Handler().ServeHTTP(recVerifyPub, reqVerifyPub)
+
+	if recVerifyPub.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public verify of rejected document, got %d: %s", recVerifyPub.Code, recVerifyPub.Body.String())
+	}
+	var resPub records.PublicVerification
+	if err := json.Unmarshal(recVerifyPub.Body.Bytes(), &resPub); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resPub.Verified {
+		t.Errorf("expected verified to be false for rejected document, got true")
+	}
+	if resPub.Status != "rejected" {
+		t.Errorf("expected status to be 'rejected', got %q", resPub.Status)
+	}
+	if !strings.Contains(resPub.RejectionReason, "Marks mismatch") {
+		t.Errorf("expected rejection reason to contain 'Marks mismatch', got %q", resPub.RejectionReason)
+	}
+
+	// 3. Public verification by jobID (when user copies the job ID into verify URL)
+	reqVerifyJob := httptest.NewRequest(http.MethodGet, "/api/v1/verify/"+jobID, nil)
+	recVerifyJob := httptest.NewRecorder()
+	s.Handler().ServeHTTP(recVerifyJob, reqVerifyJob)
+
+	if recVerifyJob.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public verify of rejected document by job ID, got %d: %s", recVerifyJob.Code, recVerifyJob.Body.String())
+	}
+	var resJob records.PublicVerification
+	if err := json.Unmarshal(recVerifyJob.Body.Bytes(), &resJob); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resJob.Verified {
+		t.Errorf("expected verified to be false for rejected document by job ID, got true")
+	}
+	if resJob.Status != "rejected" {
+		t.Errorf("expected status to be 'rejected' by job ID, got %q", resJob.Status)
+	}
+
+	// 4. Verify removed document returns 404
+	delete(recRepo.records, jobID)
+	delete(jobRepo.jobs, jobID)
+	reqRemoved := httptest.NewRequest(http.MethodGet, "/api/v1/verify/"+jobID, nil)
+	recRemoved := httptest.NewRecorder()
+	s.Handler().ServeHTTP(recRemoved, reqRemoved)
+
+	if recRemoved.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for removed document, got %d", recRemoved.Code)
+	}
+}
+
 
