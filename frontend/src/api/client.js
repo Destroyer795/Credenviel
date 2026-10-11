@@ -4,6 +4,10 @@ const CLOUD_API_URL = 'https://ca-api-n2ivlk5gk235i.blackhill-c3a2b095.eastasia.
 const runtimeEnv = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {}
 const API_BASE_URL = runtimeEnv.VITE_API_BASE_URL || CLOUD_API_URL
 
+export function getApiBaseUrl() {
+  return API_BASE_URL
+}
+
 export class ApiError extends Error {
   constructor(status, message, data = null) {
     super(message)
@@ -37,6 +41,25 @@ export function shouldRefreshUploadToken(error, uploadUrl) {
 
 let backendAvailable = true
 
+// Supplies a fresh Firebase ID token per request (registered by AuthProvider).
+let tokenProvider = null
+
+export function setTokenProvider(provider) {
+  tokenProvider = provider
+}
+
+async function currentToken(authState) {
+  if (tokenProvider) {
+    try {
+      const fresh = await tokenProvider()
+      if (fresh) return fresh
+    } catch {
+      // fall back to the token captured in auth state
+    }
+  }
+  return authState?.token || ''
+}
+
 /**
  * Perform an authenticated API request against the Azure Go API backend
  */
@@ -46,9 +69,10 @@ async function fetchWithAuth(endpoint, options = {}, authState = null) {
     ...(options.headers || {}),
   }
 
-  // Inject Authorization Bearer token (Entra ID or signed token)
-  if (authState?.token) {
-    headers['Authorization'] = `Bearer ${authState.token}`
+  // Inject the Firebase ID token as a Bearer credential
+  const bearer = await currentToken(authState)
+  if (bearer) {
+    headers['Authorization'] = `Bearer ${bearer}`
   }
 
   try {
@@ -80,6 +104,13 @@ async function fetchWithAuth(endpoint, options = {}, authState = null) {
     }
     throw err
   }
+}
+
+/**
+ * Fetch the signed-in user's profile; the backend verifies the token and resolves the role.
+ */
+export async function getCurrentUser(token) {
+  return fetchWithAuth('/api/v1/me', {}, { token })
 }
 
 /**
@@ -273,7 +304,7 @@ export async function getVerification(verificationId) {
 
     // 3. Fallback: Check if user is logged in as an issuer and can query review details
     try {
-      const savedToken = localStorage.getItem('credenviel_token')
+      const savedToken = await currentToken()
       if (savedToken) {
         const revRes = await fetch(`${API_BASE_URL}/api/v1/review/${encodeURIComponent(verificationId)}`, {
           headers: { Authorization: `Bearer ${savedToken}` }
