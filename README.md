@@ -84,7 +84,7 @@ flowchart TB
     RawUploads -->|4. BlobCreated Event| EventGrid
     EventGrid -->|5. Push Event| AzFunction
     AzFunction -->|6. Set Status: queued| Postgres
-    AzFunction -->|7. Enqueue {job_id}| ServiceBus
+    AzFunction -->|7. Enqueue job_id message| ServiceBus
 
     %% 3. Worker Processing Flow
     ServiceBus -->|Queue Depth Metric| KEDA
@@ -102,7 +102,7 @@ flowchart TB
 
     %% 4. Review & Approval Flow
     IssuerUI -->|14. Inspect, Search Directory, Approve/Delete| GoAPI
-    GoAPI -->|Promote to 'Confirmed by Registrar' / Cascade Delete| Postgres
+    GoAPI -->|Promote to Confirmed by Registrar / Cascade Delete| Postgres
 
     %% 5. Public Verification Flow
     VerifyUI -->|15. Scan QR / Fetch Verification ID| GoAPI
