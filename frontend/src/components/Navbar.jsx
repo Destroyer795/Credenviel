@@ -8,21 +8,24 @@ import { AuthModal } from './AuthModal'
 export function Navbar() {
   const { user, isStudent, isIssuer, isAuthenticated, logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
   const [authModalOpen, setAuthModalOpen] = useState(false)
-  const [modalPreset, setModalPreset] = useState(null)
   const navigate = useNavigate()
 
-  const handleOpenAuth = (preset = null) => {
-    setModalPreset(preset)
-    setAuthModalOpen(true)
-  }
+  const handleOpenAuth = () => setAuthModalOpen(true)
 
   const closeMobileMenu = () => {
     setMobileMenuOpen(false)
   }
 
-  const handleSignOut = () => {
-    logout()
+  const handleSignOut = async () => {
+    if (signingOut) return
+    setSigningOut(true)
+    try {
+      await logout()
+    } finally {
+      setSigningOut(false)
+    }
     closeMobileMenu()
     navigate('/')
   }
@@ -81,17 +84,18 @@ export function Navbar() {
                 id="btn-sign-out"
                 className="nav-sign-out-btn"
                 onClick={handleSignOut}
+                disabled={signingOut}
                 title="Sign out of account"
               >
                 <IconLogOut size={14} />
-                <span>Sign Out</span>
+                <span>{signingOut ? 'Signing out…' : 'Sign Out'}</span>
               </button>
             </div>
           ) : (
             <button
               id="btn-open-auth-modal"
               className="nav-sign-in-btn"
-              onClick={() => handleOpenAuth(null)}
+              onClick={() => handleOpenAuth()}
             >
               Sign In
             </button>
@@ -109,14 +113,7 @@ export function Navbar() {
       </div>
 
       {/* Auth Modal */}
-      <AuthModal
-        isOpen={authModalOpen}
-        initialPreset={modalPreset}
-        onClose={() => {
-          setAuthModalOpen(false)
-          setModalPreset(null)
-        }}
-      />
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
@@ -178,8 +175,9 @@ export function Navbar() {
                   className="btn btn-secondary"
                   style={{ width: '100%', fontSize: '0.85rem' }}
                   onClick={handleSignOut}
+                  disabled={signingOut}
                 >
-                  Sign Out
+                  {signingOut ? 'Signing out…' : 'Sign Out'}
                 </button>
               </div>
             ) : (
@@ -188,7 +186,7 @@ export function Navbar() {
                 style={{ width: '100%', fontSize: '0.85rem' }}
                 onClick={() => {
                   closeMobileMenu()
-                  handleOpenAuth(null)
+                  handleOpenAuth()
                 }}
               >
                 Sign In
