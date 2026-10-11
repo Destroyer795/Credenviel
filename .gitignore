@@ -48,3 +48,8 @@ _pdf_text.txt
 scale_test_results.csv
 /*Report*.pdf
 scratch/
+
+# Firebase emulator logs
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
