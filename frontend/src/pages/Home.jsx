@@ -19,30 +19,18 @@ import {
 import { AuthModal } from '../components/AuthModal'
 
 export function Home() {
-  const { user, isStudent, isIssuer, isAuthenticated, switchDemoUser } = useAuth()
+  const { user, isStudent, isIssuer, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const [apiOnline, setApiOnline] = useState(null)
   const [activeStep, setActiveStep] = useState(3)
   const [searchVerifyId, setSearchVerifyId] = useState('')
   const [authModalOpen, setAuthModalOpen] = useState(false)
-  const [authModalPreset, setAuthModalPreset] = useState(null)
-  const [authModalRole, setAuthModalRole] = useState('student')
 
   useEffect(() => {
     checkHealth().then(setApiOnline)
   }, [])
 
-  const handleOpenAuth = (role = 'student', preset = null) => {
-    setAuthModalRole(role)
-    setAuthModalPreset(preset)
-    setAuthModalOpen(true)
-  }
-
-  const handlePresetOneClick = (roleKey) => {
-    switchDemoUser(roleKey)
-    if (roleKey === 'student') navigate('/student')
-    else if (roleKey === 'issuer') navigate('/issuer')
-  }
+  const handleOpenAuth = () => setAuthModalOpen(true)
 
   const handleQuickVerify = (e) => {
     e.preventDefault()
@@ -82,7 +70,7 @@ export function Home() {
               <button
                 className="btn btn-primary"
                 id="btn-hero-signin"
-                onClick={() => handleOpenAuth('student', null)}
+                onClick={() => handleOpenAuth()}
               >
                 <IconGraduationCap size={18} />
                 <span>Student Portal</span>
@@ -91,7 +79,7 @@ export function Home() {
               <button
                 className="btn btn-secondary"
                 id="btn-hero-admin"
-                onClick={() => handleOpenAuth('issuer', null)}
+                onClick={() => handleOpenAuth()}
               >
                 <IconBuilding size={18} />
                 <span>Exam Cell & Issuer</span>
@@ -131,31 +119,6 @@ export function Home() {
               </Link>
             </>
           )}
-        </div>
-
-        {/* Instant Evaluation Quick-Access Presets */}
-        <div style={{ marginTop: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Quick 1-Click Evaluation Presets:
-          </span>
-          <button
-            type="button"
-            className="auth-preset-chip"
-            onClick={() => handlePresetOneClick('student')}
-            title="Authenticate instantly as Student Alice Chen"
-          >
-            <IconGraduationCap size={13} style={{ marginRight: '4px' }} />
-            Student (Alice Chen)
-          </button>
-          <button
-            type="button"
-            className="auth-preset-chip"
-            onClick={() => handlePresetOneClick('issuer')}
-            title="Authenticate instantly as University Exam Cell Staff"
-          >
-            <IconBuilding size={13} style={{ marginRight: '4px' }} />
-            Exam Cell Staff (Issuer)
-          </button>
         </div>
 
         {/* Public Verifier Quick Lookup Box */}
@@ -309,7 +272,7 @@ export function Home() {
               <button
                 className="btn btn-primary"
                 style={{ width: '100%', justifyContent: 'center' }}
-                onClick={() => handleOpenAuth('issuer', null)}
+                onClick={() => handleOpenAuth()}
               >
                 <span>Exam Cell Staff Access</span>
                 <IconArrowRight size={15} />
@@ -344,7 +307,7 @@ export function Home() {
               <button
                 className="btn btn-secondary"
                 style={{ width: '100%', justifyContent: 'center' }}
-                onClick={() => handleOpenAuth('student', null)}
+                onClick={() => handleOpenAuth()}
               >
                 <span>Student / Graduate Access</span>
               </button>
@@ -420,15 +383,7 @@ export function Home() {
         </div>
       </div>
 
-      <AuthModal
-        isOpen={authModalOpen}
-        initialPreset={authModalPreset}
-        initialRole={authModalRole}
-        onClose={() => {
-          setAuthModalOpen(false)
-          setAuthModalPreset(null)
-        }}
-      />
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </div>
   )
 }
