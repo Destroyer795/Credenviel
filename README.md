@@ -339,4 +339,4 @@ See [docs/EVALUATION.md](docs/EVALUATION.md) for the 20-mark rubric mapping, rep
 
 ## License
 
-Private - academic project.
+This project is open-source and licensed under the [MIT License](LICENSE).
