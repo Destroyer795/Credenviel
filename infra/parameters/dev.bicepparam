@@ -55,3 +55,5 @@ param firebaseProjectId = 'credenviel'
 // Comma-separated exam-cell emails granted the issuer role once verified; kept out of source control:
 //   export FIREBASE_ISSUER_EMAILS="examcell@university.edu,registrar@university.edu"
 param firebaseIssuerEmails = readEnvironmentVariable('FIREBASE_ISSUER_EMAILS', '')
+// Fixed demo accounts are enabled for the academic demonstration environment only.
+param demoAuthEnabled = true

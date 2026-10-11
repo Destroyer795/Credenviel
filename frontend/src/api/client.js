@@ -74,6 +74,9 @@ async function fetchWithAuth(endpoint, options = {}, authState = null) {
   if (bearer) {
     headers['Authorization'] = `Bearer ${bearer}`
   }
+  if (authState?.demoAuth) {
+    headers['X-Demo-Account'] = authState.demoAuth.account
+  }
 
   try {
     const response = await fetch(url, {
@@ -111,6 +114,18 @@ async function fetchWithAuth(endpoint, options = {}, authState = null) {
  */
 export async function getCurrentUser(token) {
   return fetchWithAuth('/api/v1/me', {}, { token })
+}
+
+export async function setCurrentUserRole(role, authState) {
+  return fetchWithAuth(
+    '/api/v1/me/role',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    },
+    authState,
+  )
 }
 
 /**

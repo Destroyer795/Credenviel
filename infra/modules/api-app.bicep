@@ -71,6 +71,9 @@ param firebaseProjectId string = ''
 @description('Comma-separated verified emails granted the issuer role (others are students unless a role custom claim is set)')
 param firebaseIssuerEmails string = ''
 
+@description('Allow fixed demo accounts without Firebase')
+param demoAuthEnabled bool = false
+
 @description('Shared internal API key for worker callbacks')
 @secure()
 param internalApiKey string
@@ -188,6 +191,10 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'FIREBASE_ISSUER_EMAILS'
               value: firebaseIssuerEmails
+            }
+            {
+              name: 'DEMO_AUTH_ENABLED'
+              value: demoAuthEnabled ? 'true' : 'false'
             }
             {
               name: 'INTERNAL_API_KEY'

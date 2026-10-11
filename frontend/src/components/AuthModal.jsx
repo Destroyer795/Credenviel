@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, describeAuthError } from '../auth/AuthContext'
-import { IconX } from './Icons'
+import { IconX, IconGraduationCap, IconBuilding } from './Icons'
 
 const MODES = {
   signin: {
@@ -30,6 +30,8 @@ export function AuthModal({ isOpen, onClose }) {
     signInWithEmail,
     signUpWithEmail,
     signInWithGoogle,
+    signInDemo,
+    chooseRole,
     resetPassword,
   } = useAuth()
   const navigate = useNavigate()
@@ -37,6 +39,8 @@ export function AuthModal({ isOpen, onClose }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState('student')
+  const [rolePrompt, setRolePrompt] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -47,6 +51,8 @@ export function AuthModal({ isOpen, onClose }) {
       setName('')
       setEmail('')
       setPassword('')
+      setRole('student')
+      setRolePrompt(false)
       setError('')
       setNotice('')
       setBusy(false)
@@ -55,11 +61,11 @@ export function AuthModal({ isOpen, onClose }) {
 
   // Once Firebase signs the user in and the API confirms their role, route to their portal.
   useEffect(() => {
-    if (isOpen && user) {
+    if (isOpen && user && !rolePrompt) {
       onClose()
       navigate(user.role === 'issuer' ? '/issuer' : '/student')
     }
-  }, [isOpen, user, onClose, navigate])
+  }, [isOpen, user, rolePrompt, onClose, navigate])
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -107,7 +113,7 @@ export function AuthModal({ isOpen, onClose }) {
       return
     }
     run(() =>
-      mode === 'signup' ? signUpWithEmail({ name, email, password }) : signInWithEmail(email, password),
+      mode === 'signup' ? signUpWithEmail({ name, email, password, role }) : signInWithEmail(email, password),
     )
   }
 
@@ -159,6 +165,20 @@ export function AuthModal({ isOpen, onClose }) {
             </div>
           )}
 
+          {mode === 'signup' && (
+            <div className="auth-role-group">
+              <span className="auth-field-label">Choose your role</span>
+              <div className="auth-role-selector" role="group" aria-label="Choose your role">
+                <button type="button" className={`auth-role-btn ${role === 'student' ? 'active' : ''}`} onClick={() => setRole('student')}>
+                  <IconGraduationCap size={16} /> Student
+                </button>
+                <button type="button" className={`auth-role-btn ${role === 'issuer' ? 'active' : ''}`} onClick={() => setRole('issuer')}>
+                  <IconBuilding size={16} /> Exam Cell
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="auth-field-group">
             <label className="auth-field-label" htmlFor="auth-email">
               Email Address
@@ -206,7 +226,7 @@ export function AuthModal({ isOpen, onClose }) {
           </div>
         </form>
 
-        {mode !== 'reset' && (
+        {mode !== 'reset' && !rolePrompt && (
           <>
             <div className="auth-divider">
               <span>or</span>
@@ -216,10 +236,44 @@ export function AuthModal({ isOpen, onClose }) {
               className="btn btn-secondary"
               style={{ width: '100%', padding: '0.7rem', justifyContent: 'center' }}
               disabled={busy || !isFirebaseConfigured}
-              onClick={() => run(signInWithGoogle)}
+              onClick={() => run(async () => {
+                await signInWithGoogle()
+                setRolePrompt(true)
+              })}
             >
               <span>Continue with Google</span>
             </button>
+          </>
+        )}
+
+        {rolePrompt && (
+          <div className="auth-role-group" style={{ marginTop: '1rem' }}>
+            <span className="auth-field-label">Choose the account role</span>
+            <p className="auth-modal-sub" style={{ margin: '0.25rem 0 0.6rem' }}>
+              Your Google account is signed in. Choose how this account should enter the portal.
+            </p>
+            <div className="auth-role-selector" role="group" aria-label="Choose the account role">
+              <button type="button" className="auth-role-btn" disabled={busy} onClick={() => run(async () => { await chooseRole('student'); setRolePrompt(false) })}>
+                <IconGraduationCap size={16} /> Student
+              </button>
+              <button type="button" className="auth-role-btn" disabled={busy} onClick={() => run(async () => { await chooseRole('issuer'); setRolePrompt(false) })}>
+                <IconBuilding size={16} /> Exam Cell
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'signin' && !rolePrompt && (
+          <>
+            <div className="auth-divider"><span>demo access</span></div>
+            <div className="auth-role-selector" aria-label="Demo accounts">
+              <button type="button" className="auth-role-btn" disabled={busy} onClick={() => { signInDemo('student'); onClose(); navigate('/student') }}>
+                <IconGraduationCap size={16} /> Demo Student
+              </button>
+              <button type="button" className="auth-role-btn" disabled={busy} onClick={() => { signInDemo('issuer'); onClose(); navigate('/issuer') }}>
+                <IconBuilding size={16} /> Demo Exam Cell
+              </button>
+            </div>
           </>
         )}
 

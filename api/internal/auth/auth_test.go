@@ -128,3 +128,19 @@ func TestAuth_DefaultName(t *testing.T) {
 		t.Errorf("expected name to default to entraID, got %s", capturedUser.Name)
 	}
 }
+
+func TestDemoHeaderSource(t *testing.T) {
+	studentReq := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	studentReq.Header.Set("X-Demo-Account", "student")
+	student, err := (DemoHeaderSource{}).Identify(studentReq)
+	if err != nil || student.Role != "student" || !student.RoleExplicit {
+		t.Fatalf("unexpected demo student identity: %+v, err=%v", student, err)
+	}
+
+	issuerReq := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	issuerReq.Header.Set("X-Demo-Account", "issuer")
+	issuer, err := (DemoHeaderSource{}).Identify(issuerReq)
+	if err != nil || issuer.Role != "issuer" || !issuer.RoleExplicit {
+		t.Fatalf("unexpected demo issuer identity: %+v, err=%v", issuer, err)
+	}
+}

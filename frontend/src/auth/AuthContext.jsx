@@ -10,7 +10,7 @@ import {
   signOut,
 } from 'firebase/auth'
 import { firebaseAuth, googleProvider, isFirebaseConfigured } from './firebaseConfig'
-import { getCurrentUser, getApiBaseUrl, setTokenProvider, ApiError } from '../api/client'
+import { getCurrentUser, getApiBaseUrl, setTokenProvider, setCurrentUserRole, ApiError } from '../api/client'
 
 const AuthContext = createContext(null)
 
@@ -60,6 +60,7 @@ export function AuthProvider({ children }) {
   // True until Firebase has restored (or ruled out) a persisted session
   const [loading, setLoading] = useState(isFirebaseConfigured)
   const [sessionError, setSessionError] = useState('')
+  const [demoAuth, setDemoAuth] = useState(null)
   const latestRun = useRef(0)
   // While true, the token listener ignores sign-in events: explicit sign-ins sync once themselves,
   // so they can report a failed profile check back to the sign-in form.
@@ -77,6 +78,7 @@ export function AuthProvider({ children }) {
     if (!fbUser) {
       setUser(null)
       setToken('')
+      setDemoAuth(null)
       setSessionError('')
       setLoading(false)
       return { ok: true }
@@ -88,6 +90,7 @@ export function AuthProvider({ children }) {
       const profile = await getCurrentUser(idToken)
       if (run !== latestRun.current) return { ok: true }
       setToken(idToken)
+      setDemoAuth(null)
       setUser({
         uid: fbUser.uid,
         name: profile.name || fbUser.displayName || fbUser.email || 'Campus User',
@@ -112,6 +115,25 @@ export function AuthProvider({ children }) {
     } finally {
       if (run === latestRun.current) setLoading(false)
     }
+  }, [])
+
+  const chooseRole = useCallback(async (role) => {
+    if (role !== 'student' && role !== 'issuer') throw new Error('Choose Student or Exam Cell.')
+    const profile = await setCurrentUserRole(role, { token, demoAuth })
+    setUser((current) => current ? { ...current, role: profile.role, title: TITLES[profile.role] } : current)
+    if (firebaseAuth?.currentUser) await syncSession(firebaseAuth.currentUser)
+    return profile
+  }, [demoAuth, syncSession, token])
+
+  const signInDemo = useCallback((account) => {
+    const demo = account === 'issuer'
+      ? { account: 'issuer', role: 'issuer', name: 'Demo Exam Cell', email: 'examcell.demo@amrita.edu' }
+      : { account: 'student', role: 'student', name: 'Demo Student', email: 'student.demo@amrita.edu' }
+    setDemoAuth({ account: demo.account })
+    setToken('')
+    setSessionError('')
+    setLoading(false)
+    setUser({ uid: `demo-${demo.account}`, name: demo.name, email: demo.email, emailVerified: true, role: demo.role, title: TITLES[demo.role] })
   }, [])
 
   useEffect(() => {
@@ -146,16 +168,18 @@ export function AuthProvider({ children }) {
   )
 
   const signUpWithEmail = useCallback(
-    ({ name, email, password }) =>
-      runExplicitAuth(async () => {
+    async ({ name, email, password, role }) => {
+      await runExplicitAuth(async () => {
         const cred = await createUserWithEmailAndPassword(requireAuth(), email.trim(), password)
         await updateProfile(cred.user, { displayName: name.trim() })
         sendEmailVerification(cred.user).catch(() => {})
         // Force a token refresh so the saved display name is in the token the API sees
         await cred.user.getIdToken(true)
         return cred.user
-      }),
-    [runExplicitAuth],
+      })
+      if (role) await chooseRole(role)
+    },
+    [chooseRole, runExplicitAuth],
   )
 
   const signInWithGoogle = useCallback(
@@ -189,6 +213,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = useCallback(async () => {
+    setDemoAuth(null)
+    setUser(null)
     if (firebaseAuth) await signOut(firebaseAuth)
   }, [])
 
@@ -207,9 +233,12 @@ export function AuthProvider({ children }) {
         isIssuer,
         isAuthenticated,
         isFirebaseConfigured,
+        demoAuth,
         signInWithEmail,
         signUpWithEmail,
         signInWithGoogle,
+        signInDemo,
+        chooseRole,
         resetPassword,
         refreshSession,
         retrySession,

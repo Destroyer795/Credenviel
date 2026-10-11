@@ -60,12 +60,12 @@ func (d *DB) UpsertUser(ctx context.Context, ident auth.Identity) (auth.User, er
 		INSERT INTO users (entra_id, role, name)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (entra_id) DO UPDATE
-		SET role = EXCLUDED.role, name = EXCLUDED.name
+		SET role = CASE WHEN $4 THEN EXCLUDED.role ELSE users.role END, name = EXCLUDED.name
 		RETURNING id, entra_id, role, name
 	`
 
 	var u auth.User
-	err := d.pool.QueryRow(ctx, query, ident.ExternalID, ident.Role, ident.Name).Scan(
+	err := d.pool.QueryRow(ctx, query, ident.ExternalID, ident.Role, ident.Name, ident.RoleExplicit).Scan(
 		&u.ID,
 		&u.ExternalID,
 		&u.Role,
@@ -76,6 +76,14 @@ func (d *DB) UpsertUser(ctx context.Context, ident auth.Identity) (auth.User, er
 	}
 
 	return u, nil
+}
+
+func (d *DB) SetUserRole(ctx context.Context, userID, role string) error {
+	_, err := d.pool.Exec(ctx, `UPDATE users SET role = $1 WHERE id = $2`, role, userID)
+	if err != nil {
+		return fmt.Errorf("failed to set user role: %w", err)
+	}
+	return nil
 }
 
 // Create inserts a new job into the database.

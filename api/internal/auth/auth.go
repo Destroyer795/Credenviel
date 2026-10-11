@@ -24,6 +24,7 @@ type Identity struct {
 	ExternalID string
 	Role       string
 	Name       string
+	RoleExplicit bool
 }
 
 // IdentitySource extracts caller identity from an HTTP request.
@@ -34,6 +35,10 @@ type IdentitySource interface {
 // UserStore defines storage operations for users.
 type UserStore interface {
 	UpsertUser(ctx context.Context, ident Identity) (User, error)
+}
+
+type RoleStore interface {
+	SetUserRole(ctx context.Context, userID, role string) error
 }
 
 // IdentityFunc adapts a function to the IdentitySource interface.
@@ -65,7 +70,21 @@ func (d DevHeaderSource) Identify(r *http.Request) (Identity, error) {
 		ExternalID: externalID,
 		Role:       role,
 		Name:       name,
+		RoleExplicit: true,
 	}, nil
+}
+
+type DemoHeaderSource struct{}
+
+func (d DemoHeaderSource) Identify(r *http.Request) (Identity, error) {
+	switch strings.TrimSpace(r.Header.Get("X-Demo-Account")) {
+	case "student":
+		return Identity{ExternalID: "demo-student", Role: "student", Name: "Demo Student", RoleExplicit: true}, nil
+	case "issuer":
+		return Identity{ExternalID: "demo-issuer", Role: "issuer", Name: "Demo Exam Cell", RoleExplicit: true}, nil
+	default:
+		return Identity{}, errors.New("invalid demo account")
+	}
 }
 
 // Middleware creates an HTTP middleware that extracts identity and provisions the user JIT.

@@ -141,9 +141,10 @@ func (s *FirebaseIdentitySource) Identify(r *http.Request) (Identity, error) {
 	verified, _ := claims["email_verified"].(bool)
 
 	return Identity{
-		ExternalID: uid,
-		Role:       s.resolveRole(claims, email, verified),
-		Name:       displayName(claims, email, uid),
+		ExternalID:   uid,
+		Role:         s.resolveRole(claims, email, verified),
+		Name:         displayName(claims, email, uid),
+		RoleExplicit: s.roleIsExplicit(claims, email, verified),
 	}, nil
 }
 
@@ -163,6 +164,14 @@ func (s *FirebaseIdentitySource) resolveRole(claims jwt.MapClaims, email string,
 		}
 	}
 	return "student"
+}
+
+func (s *FirebaseIdentitySource) roleIsExplicit(claims jwt.MapClaims, email string, verified bool) bool {
+	if raw, ok := claims["role"].(string); ok && normalizeRole(raw) != "" {
+		return true
+	}
+	_, allowed := s.issuerEmails[strings.ToLower(email)]
+	return verified && allowed
 }
 
 func normalizeRole(val string) string {

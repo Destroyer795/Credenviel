@@ -98,12 +98,12 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 		if origin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Dev-User, X-Dev-Role, X-Dev-Name, X-User-Role, X-User-ID, X-User-Name, X-Internal-Secret, x-ms-blob-type")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Dev-User, X-Dev-Role, X-Dev-Name, X-Demo-Account, X-User-Role, X-User-ID, X-User-Name, X-Internal-Secret, x-ms-blob-type")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Max-Age", "86400")
 		} else {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Dev-User, X-Dev-Role, X-Dev-Name, X-User-Role, X-User-ID, X-User-Name, X-Internal-Secret, x-ms-blob-type")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Dev-User, X-Dev-Role, X-Dev-Name, X-Demo-Account, X-User-Role, X-User-ID, X-User-Name, X-Internal-Secret, x-ms-blob-type")
 		}
 
 		if r.Method == http.MethodOptions {
@@ -122,15 +122,24 @@ func (s *Server) SetIdentitySource(src auth.IdentitySource) {
 
 // newIdentitySource builds the request authenticator for the configured AUTH_MODE.
 func newIdentitySource(cfg *config.Config) auth.IdentitySource {
+	var source auth.IdentitySource = auth.DevHeaderSource{}
 	if cfg != nil && cfg.AuthMode == "firebase" {
-		return auth.NewFirebaseIdentitySource(auth.FirebaseConfig{
+		source = auth.NewFirebaseIdentitySource(auth.FirebaseConfig{
 			ProjectID:    cfg.FirebaseProjectID,
 			IssuerEmails: auth.ParseEmailList(cfg.FirebaseIssuerEmail),
 			// Defense in depth: main.go already refuses this combination outside local.
 			AllowUnsigned: cfg.FirebaseAuthEmulatorHost != "" && cfg.AppEnv == "local",
 		})
 	}
-	return auth.DevHeaderSource{}
+	if cfg != nil && cfg.DemoAuthEnabled {
+		return auth.IdentityFunc(func(r *http.Request) (auth.Identity, error) {
+			if strings.TrimSpace(r.Header.Get("X-Demo-Account")) != "" {
+				return auth.DemoHeaderSource{}.Identify(r)
+			}
+			return source.Identify(r)
+		})
+	}
+	return source
 }
 
 func (s *Server) RateLimiter() *RateLimiter {
@@ -159,6 +168,7 @@ func (s *Server) routes() {
 
 	// Current user profile (role is resolved server-side from the verified token)
 	s.mux.Handle("GET /api/v1/me", authMiddleware(http.HandlerFunc(s.handleMe)))
+	s.mux.Handle("POST /api/v1/me/role", authMiddleware(http.HandlerFunc(s.handleSetRole)))
 
 	// Authenticated jobs routes
 	s.mux.Handle("POST /api/v1/jobs", authMiddleware(http.HandlerFunc(s.handleCreateJob)))
@@ -190,6 +200,33 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
+func (s *Server) handleSetRole(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	store, ok := s.userStore.(auth.RoleStore)
+	if !ok {
+		http.Error(w, `{"error":"role_selection_unavailable"}`, http.StatusNotImplemented)
+		return
+	}
+	var request struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil || (request.Role != "student" && request.Role != "issuer") {
+		http.Error(w, `{"error":"bad_request","message":"role must be student or issuer"}`, http.StatusBadRequest)
+		return
+	}
+	if err := store.SetUserRole(r.Context(), user.ID, request.Role); err != nil {
+		http.Error(w, `{"error":"internal_server_error","message":"could not save role"}`, http.StatusInternalServerError)
+		return
+	}
+	user.Role = request.Role
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }

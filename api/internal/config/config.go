@@ -29,6 +29,7 @@ type Config struct {
 	AzureClientID       string
 	FirebaseProjectID   string
 	FirebaseIssuerEmail string // comma-separated emails granted the issuer role
+	DemoAuthEnabled     bool
 	// FirebaseAuthEmulatorHost (host:port) enables the local Firebase Auth Emulator.
 	// Only honored when AppEnv is "local"; startup fails otherwise.
 	FirebaseAuthEmulatorHost string
@@ -83,6 +84,7 @@ func LoadWith(getenv func(string) string) *Config {
 		AzureClientID:       getVal(getenv, "AZURE_CLIENT_ID", ""),
 		FirebaseProjectID:   getVal(getenv, "FIREBASE_PROJECT_ID", ""),
 		FirebaseIssuerEmail: getVal(getenv, "FIREBASE_ISSUER_EMAILS", ""),
+		DemoAuthEnabled:     getVal(getenv, "DEMO_AUTH_ENABLED", "false") == "true",
 
 		FirebaseAuthEmulatorHost: getVal(getenv, "FIREBASE_AUTH_EMULATOR_HOST", ""),
 	}

@@ -44,6 +44,9 @@ param firebaseProjectId string = ''
 @description('Comma-separated verified emails granted the issuer role')
 param firebaseIssuerEmails string = ''
 
+@description('Allow the two fixed demo accounts without Firebase; keep enabled only for demonstration environments')
+param demoAuthEnabled bool = false
+
 @secure()
 @description('Shared internal API key for worker callbacks')
 param internalApiKey string = ''
@@ -265,6 +268,7 @@ module apiApp 'modules/api-app.bicep' = if (deployApps && deployApiApp && !empty
     authMode: authMode
     firebaseProjectId: firebaseProjectId
     firebaseIssuerEmails: firebaseIssuerEmails
+    demoAuthEnabled: demoAuthEnabled
     internalApiKey: !empty(internalApiKey) ? internalApiKey : 'credenviel-internal-worker-key-placeholder'
   }
 }

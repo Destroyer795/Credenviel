@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
@@ -20,6 +21,24 @@ type CachedUserStore struct {
 
 	mu      sync.Mutex
 	entries map[Identity]cachedUser
+}
+
+func (c *CachedUserStore) SetUserRole(ctx context.Context, userID, role string) error {
+	store, ok := c.inner.(RoleStore)
+	if !ok {
+		return errors.New("user store does not support role changes")
+	}
+	if err := store.SetUserRole(ctx, userID, role); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	for key, entry := range c.entries {
+		if entry.user.ID == userID {
+			delete(c.entries, key)
+		}
+	}
+	c.mu.Unlock()
+	return nil
 }
 
 type cachedUser struct {
