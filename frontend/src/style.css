@@ -480,6 +480,84 @@ body {
   box-shadow: 0 1px 3px rgba(37, 43, 50, 0.06);
 }
 
+.auth-oauth-role-view {
+  display: flex;
+  flex-direction: column;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.auth-role-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.auth-role-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.15rem;
+  border-radius: 12px;
+  border: 1.5px solid var(--border-subtle);
+  background: var(--bg-frost);
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.auth-role-card-btn:hover:not(:disabled) {
+  border-color: var(--soft-blue);
+  background: #FFFFFF;
+  box-shadow: 0 4px 16px rgba(77, 156, 197, 0.12);
+  transform: translateY(-1px);
+}
+
+.auth-role-card-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-role-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.auth-role-card-icon.student {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563EB;
+}
+
+.auth-role-card-icon.issuer {
+  background: rgba(185, 28, 28, 0.1);
+  color: #B91C1C;
+}
+
+.auth-role-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.auth-role-card-text strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.auth-role-card-text span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 .auth-field-group {
   display: flex;
   flex-direction: column;
