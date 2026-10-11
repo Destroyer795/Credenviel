@@ -20,7 +20,7 @@ The project addresses the archive backlog that remains outside digital certifica
 
 ```mermaid
 flowchart LR
-    U[Student or issuer] -->|JWT-authenticated| FE[React frontend\nAzure Static Web Apps]
+    U[Student or issuer] -->|Firebase-authenticated| FE[React frontend\nAzure Static Web Apps]
     FE -->|Create job| API[Go API\nAzure Container Apps]
     API -->|15-minute write SAS| FE
     FE -->|Direct PUT| RAW[(Blob Storage\nraw-uploads)]
@@ -106,7 +106,7 @@ The public verifier accepts a public verification ID or QR code and displays the
 
 ## Security and Data Protection
 
-- JWT authentication with issuer/student roles.
+- Firebase Authentication (email/password and Google) with API-verified ID tokens and issuer/student roles. Setup guide: [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md).
 - Student job queries are scoped to the authenticated uploader.
 - Issuer-only review and bulk-upload operations.
 - User-delegation SAS tokens scoped to one blob path and limited in time.
