@@ -1,4 +1,4 @@
-// Go API Container App — issues SAS tokens, manages jobs, validates Entra ID JWTs,
+// Go API Container App — issues SAS tokens, manages jobs, verifies Firebase ID tokens,
 // and serves public verification endpoints.
 // Min replicas: 0 (scales to zero when idle to conserve student credits).
 
@@ -58,26 +58,18 @@ param databaseName string = 'credenviel'
 @description('Database user')
 param databaseUser string = 'credenvieladmin'
 
-@description('Authentication mode (entra, jwt, dev)')
+@description('Authentication mode (firebase, dev)')
 @allowed([
-  'entra'
-  'jwt'
+  'firebase'
   'dev'
 ])
-param authMode string = 'entra'
+param authMode string = 'firebase'
 
-@description('Microsoft Entra ID Tenant ID')
-param entraTenantId string = ''
+@description('Firebase project ID; ID tokens must be issued for this project')
+param firebaseProjectId string = ''
 
-@description('Microsoft Entra ID Client ID (App ID)')
-param entraClientId string = ''
-
-@description('Microsoft Entra ID Audience (defaults to client ID if empty)')
-param entraAudience string = ''
-
-@description('Symmetric secret for JWT fallback mode')
-@secure()
-param jwtSymmetricSecret string = ''
+@description('Comma-separated verified emails granted the issuer role (others are students unless a role custom claim is set)')
+param firebaseIssuerEmails string = ''
 
 @description('Shared internal API key for worker callbacks')
 @secure()
@@ -88,8 +80,6 @@ param minReplicas int = 0
 
 @description('Maximum replicas')
 param maxReplicas int = 3
-
-var actualAudience = !empty(entraAudience) ? entraAudience : entraClientId
 
 resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'ca-api-${uniqueString(resourceGroup().id)}'
@@ -154,10 +144,6 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'internal-api-key'
           value: internalApiKey
         }
-        {
-          name: 'jwt-symmetric-secret'
-          value: jwtSymmetricSecret
-        }
       ] : [
         {
           name: 'postgres-password'
@@ -166,10 +152,6 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'internal-api-key'
           value: internalApiKey
-        }
-        {
-          name: 'jwt-symmetric-secret'
-          value: jwtSymmetricSecret
         }
       ]
     }
@@ -200,20 +182,12 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: authMode
             }
             {
-              name: 'ENTRA_TENANT_ID'
-              value: entraTenantId
+              name: 'FIREBASE_PROJECT_ID'
+              value: firebaseProjectId
             }
             {
-              name: 'ENTRA_CLIENT_ID'
-              value: entraClientId
-            }
-            {
-              name: 'ENTRA_AUDIENCE'
-              value: actualAudience
-            }
-            {
-              name: 'JWT_SYMMETRIC_SECRET'
-              secretRef: 'jwt-symmetric-secret'
+              name: 'FIREBASE_ISSUER_EMAILS'
+              value: firebaseIssuerEmails
             }
             {
               name: 'INTERNAL_API_KEY'

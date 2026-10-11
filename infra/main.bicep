@@ -35,21 +35,14 @@ param deployStaticWebApp bool = false
 @description('GitHub repository formatted as owner/repo for GitHub Actions federated credential (e.g. Destroyer795/Credenviel)')
 param githubRepo string = ''
 
-@description('Authentication mode for API (entra, jwt, dev)')
-param authMode string = 'entra'
+@description('Authentication mode for API (firebase, dev)')
+param authMode string = 'firebase'
 
-@description('Microsoft Entra ID Tenant ID')
-param entraTenantId string = ''
+@description('Firebase project ID used to verify ID tokens on the API')
+param firebaseProjectId string = ''
 
-@description('Microsoft Entra ID Client ID (App ID)')
-param entraClientId string = ''
-
-@description('Microsoft Entra ID Audience')
-param entraAudience string = ''
-
-@secure()
-@description('Symmetric secret for JWT fallback mode')
-param jwtSymmetricSecret string = ''
+@description('Comma-separated verified emails granted the issuer role')
+param firebaseIssuerEmails string = ''
 
 @secure()
 @description('Shared internal API key for worker callbacks')
@@ -270,10 +263,8 @@ module apiApp 'modules/api-app.bicep' = if (deployApps && deployApiApp && !empty
     postgresPassword: existingKeyVault.getSecret('postgres-admin-password')
     postgresFqdn: postgres.?outputs.serverFqdn ?? defaultPostgresFqdn
     authMode: authMode
-    entraTenantId: entraTenantId
-    entraClientId: entraClientId
-    entraAudience: entraAudience
-    jwtSymmetricSecret: jwtSymmetricSecret
+    firebaseProjectId: firebaseProjectId
+    firebaseIssuerEmails: firebaseIssuerEmails
     internalApiKey: !empty(internalApiKey) ? internalApiKey : 'credenviel-internal-worker-key-placeholder'
   }
 }
