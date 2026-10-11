@@ -1,48 +1,68 @@
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
-import { IconX, IconGraduationCap, IconBuilding, IconCheckCircle, IconLock } from './Icons'
+import { useAuth, describeAuthError } from '../auth/AuthContext'
+import { IconX } from './Icons'
 
-export function AuthModal({ isOpen, onClose, initialPreset = null, initialRole = 'issuer' }) {
-  const { user, login } = useAuth()
+const MODES = {
+  signin: {
+    title: 'Campus Identity Access',
+    sub: 'Sign in with your university account',
+    submit: 'Sign In to Campus Portal',
+  },
+  signup: {
+    title: 'Create Campus Account',
+    sub: 'Register your university profile for credential issuance and digitization',
+    submit: 'Create Account & Enter',
+  },
+  reset: {
+    title: 'Reset Password',
+    sub: 'We will email you a link to choose a new password',
+    submit: 'Send Reset Link',
+  },
+}
+
+export function AuthModal({ isOpen, onClose }) {
+  const {
+    user,
+    sessionError,
+    isFirebaseConfigured,
+    signInWithEmail,
+    signUpWithEmail,
+    signInWithGoogle,
+    resetPassword,
+  } = useAuth()
   const navigate = useNavigate()
-  const [isSignUp, setIsSignUp] = useState(false)
+  const [mode, setMode] = useState('signin')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState(initialRole || 'issuer')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-
-  const handleQuickLoad = (targetRole) => {
-    if (targetRole === 'student') {
-      setName('Alice Chen')
-      setEmail('alice.chen@student.university.edu')
-      setRole('student')
-    } else {
-      setName('University Exam Cell')
-      setEmail('examcell@university.edu')
-      setRole('issuer')
-    }
-    setError('')
-  }
+  const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
+      setMode('signin')
+      setName('')
+      setEmail('')
+      setPassword('')
       setError('')
-      if (initialPreset === 'student') {
-        handleQuickLoad('student')
-      } else if (initialPreset === 'issuer') {
-        handleQuickLoad('issuer')
-      } else {
-        setName('')
-        setEmail('')
-        setRole(initialRole || 'issuer')
-      }
+      setNotice('')
+      setBusy(false)
     }
-  }, [isOpen, initialPreset, initialRole])
+  }, [isOpen])
+
+  // Once Firebase signs the user in and the API confirms their role, route to their portal.
+  useEffect(() => {
+    if (isOpen && user) {
+      onClose()
+      navigate(user.role === 'issuer' ? '/issuer' : '/student')
+    }
+  }, [isOpen, user, onClose, navigate])
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) return undefined
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose()
     }
@@ -52,41 +72,43 @@ export function AuthModal({ isOpen, onClose, initialPreset = null, initialRole =
 
   if (!isOpen) return null
 
+  const copy = MODES[mode]
+
+  const switchMode = (next) => {
+    setMode(next)
+    setError('')
+    setNotice('')
+  }
+
+  const run = async (action) => {
+    setError('')
+    setNotice('')
+    setBusy(true)
+    try {
+      await action()
+    } catch (err) {
+      setError(describeAuthError(err))
+      setBusy(false)
+    }
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault()
-    setError('')
-
-    const cleanEmail = email.trim()
-    const cleanName = name.trim()
-
-    if (!cleanEmail) {
-      setError('Please provide a valid institutional email address.')
-      return
-    }
-
-    if (!cleanEmail.includes('@')) {
-      setError('Please enter a valid institutional email address.')
-      return
-    }
-
-    if (!cleanName) {
+    if (mode === 'signup' && !name.trim()) {
       setError('Please provide your full name.')
       return
     }
-
-    login({
-      name: cleanName,
-      email: cleanEmail,
-      role: role,
-    })
-
-    onClose()
-
-    if (role === 'student') {
-      navigate('/student')
-    } else {
-      navigate('/issuer')
+    if (mode === 'reset') {
+      run(async () => {
+        await resetPassword(email)
+        setNotice('If an account exists for that email, a reset link is on its way.')
+        setBusy(false)
+      })
+      return
     }
+    run(() =>
+      mode === 'signup' ? signUpWithEmail({ name, email, password }) : signInWithEmail(email, password),
+    )
   }
 
   const modalContent = (
@@ -101,132 +123,122 @@ export function AuthModal({ isOpen, onClose, initialPreset = null, initialRole =
         <div className="auth-modal-header">
           <div>
             <h3 id="auth-modal-title" className="auth-modal-title">
-              {isSignUp ? 'Create Campus Account' : 'Campus Identity Access'}
+              {copy.title}
             </h3>
-            <p className="auth-modal-sub">
-              {isSignUp
-                ? 'Register your university profile for credential issuance and digitization'
-                : 'Sign in with your university college email'}
-            </p>
+            <p className="auth-modal-sub">{copy.sub}</p>
           </div>
           <button className="auth-modal-close" onClick={onClose} aria-label="Close modal">
             <IconX size={18} />
           </button>
         </div>
 
-        {error && <div className="auth-modal-error">{error}</div>}
+        {!isFirebaseConfigured && (
+          <div className="auth-modal-error">
+            Sign-in is unavailable: Firebase is not configured for this build.
+          </div>
+        )}
+        {(error || sessionError) && <div className="auth-modal-error">{error || sessionError}</div>}
+        {notice && <div className="auth-modal-notice">{notice}</div>}
 
         <form onSubmit={handleSubmit} className="auth-modal-form">
-          {/* Role Selector Tabs - Exactly 2 Roles */}
-          <div className="auth-role-group">
-            <label className="auth-field-label">Select University Role</label>
-            <div className="auth-role-selector">
-              <button
-                type="button"
-                className={`auth-role-btn ${role === 'issuer' ? 'active' : ''}`}
-                onClick={() => setRole('issuer')}
-              >
-                <IconBuilding size={16} />
-                <span>Exam Cell (Issuer)</span>
-              </button>
-              <button
-                type="button"
-                className={`auth-role-btn ${role === 'student' ? 'active' : ''}`}
-                onClick={() => setRole('student')}
-              >
-                <IconGraduationCap size={16} />
-                <span>Student</span>
-              </button>
+          {mode === 'signup' && (
+            <div className="auth-field-group">
+              <label className="auth-field-label" htmlFor="auth-name">
+                Full Name
+              </label>
+              <input
+                id="auth-name"
+                type="text"
+                className="auth-input"
+                placeholder="e.g. Alice Chen"
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
             </div>
-          </div>
+          )}
 
-          {/* Full Name */}
-          <div className="auth-field-group">
-            <label className="auth-field-label" htmlFor="auth-name">
-              Full Name
-            </label>
-            <input
-              id="auth-name"
-              type="text"
-              className="auth-input"
-              placeholder={role === 'issuer' ? 'e.g. Exam Cell Staff / Registrar' : 'e.g. Alice Chen'}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-
-          {/* College Email */}
           <div className="auth-field-group">
             <label className="auth-field-label" htmlFor="auth-email">
-              Institutional Email Address
+              Email Address
             </label>
             <input
               id="auth-email"
               type="email"
               className="auth-input"
-              placeholder={role === 'issuer' ? 'examcell@university.edu' : 'student@university.edu'}
+              placeholder="you@university.edu"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
 
+          {mode !== 'reset' && (
+            <div className="auth-field-group">
+              <label className="auth-field-label" htmlFor="auth-password">
+                Password
+              </label>
+              <input
+                id="auth-password"
+                type="password"
+                className="auth-input"
+                placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                minLength={mode === 'signup' ? 6 : undefined}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
           <div className="auth-modal-actions">
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.75rem' }}>
-              <span>{isSignUp ? 'Create Profile & Enter' : 'Sign In to Campus Portal'}</span>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '0.75rem' }}
+              disabled={busy || !isFirebaseConfigured}
+            >
+              <span>{busy ? 'Please wait…' : copy.submit}</span>
             </button>
           </div>
         </form>
 
-        {/* Quick Testing Presets */}
-        <div className="auth-quick-presets">
-          <span className="auth-presets-label">Testing Presets:</span>
-          <div className="auth-presets-btns">
+        {mode !== 'reset' && (
+          <>
+            <div className="auth-divider">
+              <span>or</span>
+            </div>
             <button
               type="button"
-              className="auth-preset-chip"
-              onClick={() => handleQuickLoad('issuer')}
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '0.7rem', justifyContent: 'center' }}
+              disabled={busy || !isFirebaseConfigured}
+              onClick={() => run(signInWithGoogle)}
             >
-              <IconBuilding size={13} style={{ marginRight: '4px' }} />
-              Exam Cell Staff (Issuer)
+              <span>Continue with Google</span>
             </button>
-            <button
-              type="button"
-              className="auth-preset-chip"
-              onClick={() => handleQuickLoad('student')}
-            >
-              <IconGraduationCap size={13} style={{ marginRight: '4px' }} />
-              Alice Chen (Student)
-            </button>
-            <button
-              type="button"
-              className="auth-preset-chip"
-              style={{ color: 'var(--text-muted)' }}
-              onClick={() => {
-                setName('')
-                setEmail('')
-                setError('')
-              }}
-            >
-              Clear
-            </button>
-          </div>
-        </div>
+          </>
+        )}
 
         <div className="auth-modal-footer">
-          <button
-            type="button"
-            className="auth-toggle-mode"
-            onClick={() => {
-              setIsSignUp(!isSignUp)
-              setError('')
-            }}
-          >
-            {isSignUp
-              ? 'Already registered? Click to Sign In'
-              : 'New student or exam cell staff? Click to Register'}
-          </button>
+          {mode === 'signin' && (
+            <>
+              <button type="button" className="auth-toggle-mode" onClick={() => switchMode('signup')}>
+                New student or exam cell staff? Create an account
+              </button>
+              <button type="button" className="auth-toggle-mode" onClick={() => switchMode('reset')}>
+                Forgot your password?
+              </button>
+            </>
+          )}
+          {mode !== 'signin' && (
+            <button type="button" className="auth-toggle-mode" onClick={() => switchMode('signin')}>
+              Already registered? Back to Sign In
+            </button>
+          )}
         </div>
       </div>
     </div>
