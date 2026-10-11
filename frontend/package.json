@@ -15,11 +15,13 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
-    "@azure/msal-browser": "^5.25.0",
-    "@azure/msal-react": "^5.7.2",
+    "firebase": "^13.0.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.4"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6"
   }
 }
