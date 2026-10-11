@@ -47,3 +47,11 @@ param enableEventSubscription = bool(readEnvironmentVariable('ENABLE_EVENT_SUBSC
 
 // Function hosting plan: Consumption (default) or FlexConsumption (fallback if quota requires)
 param functionHostingPlan = readEnvironmentVariable('FUNCTION_HOSTING_PLAN', 'Consumption')
+
+// Firebase Authentication (D-052). The project ID is a public identifier.
+param authMode = 'firebase'
+param firebaseProjectId = 'credenviel'
+
+// Comma-separated exam-cell emails granted the issuer role once verified; kept out of source control:
+//   export FIREBASE_ISSUER_EMAILS="examcell@university.edu,registrar@university.edu"
+param firebaseIssuerEmails = readEnvironmentVariable('FIREBASE_ISSUER_EMAILS', '')
