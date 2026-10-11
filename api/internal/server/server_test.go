@@ -105,19 +105,19 @@ type memoryUserStore struct {
 }
 
 func (m *memoryUserStore) UpsertUser(ctx context.Context, ident auth.Identity) (auth.User, error) {
-	u, ok := m.users[ident.EntraID]
+	u, ok := m.users[ident.ExternalID]
 	if !ok {
 		u = auth.User{
-			ID:      "uid-" + ident.EntraID,
-			EntraID: ident.EntraID,
+			ID:      "uid-" + ident.ExternalID,
+			ExternalID: ident.ExternalID,
 			Role:    ident.Role,
 			Name:    ident.Name,
 		}
-		m.users[ident.EntraID] = u
+		m.users[ident.ExternalID] = u
 	} else {
 		u.Role = ident.Role
 		u.Name = ident.Name
-		m.users[ident.EntraID] = u
+		m.users[ident.ExternalID] = u
 	}
 	return u, nil
 }

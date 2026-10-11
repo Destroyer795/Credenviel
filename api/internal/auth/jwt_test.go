@@ -46,8 +46,8 @@ func TestJWT_HMAC_Success(t *testing.T) {
 		t.Fatalf("expected successful identification, got: %v", err)
 	}
 
-	if ident.EntraID != "user-oid-12345" {
-		t.Errorf("expected EntraID 'user-oid-12345', got %q", ident.EntraID)
+	if ident.ExternalID != "user-oid-12345" {
+		t.Errorf("expected ExternalID 'user-oid-12345', got %q", ident.ExternalID)
 	}
 	if ident.Role != "student" {
 		t.Errorf("expected Role 'student', got %q", ident.Role)
@@ -208,7 +208,7 @@ func TestJWT_JWKS_RSA_Success(t *testing.T) {
 		t.Fatalf("expected successful RSA identification, got: %v", err)
 	}
 
-	if ident.EntraID != "entra-user-oid" || ident.Role != "issuer" || ident.Name != "Registrar Officer" {
+	if ident.ExternalID != "entra-user-oid" || ident.Role != "issuer" || ident.Name != "Registrar Officer" {
 		t.Errorf("unexpected identity: %+v", ident)
 	}
 }

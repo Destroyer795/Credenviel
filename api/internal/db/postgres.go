@@ -53,7 +53,8 @@ func (d *DB) Pool() *pgxpool.Pool {
 	return d.pool
 }
 
-// UpsertUser performs JIT provisioning of a user based on Entra claims.
+// UpsertUser performs JIT provisioning of a user based on verified identity claims.
+// The Firebase UID is stored in the users.entra_id column (column name predates the move to Firebase).
 func (d *DB) UpsertUser(ctx context.Context, ident auth.Identity) (auth.User, error) {
 	query := `
 		INSERT INTO users (entra_id, role, name)
@@ -64,9 +65,9 @@ func (d *DB) UpsertUser(ctx context.Context, ident auth.Identity) (auth.User, er
 	`
 
 	var u auth.User
-	err := d.pool.QueryRow(ctx, query, ident.EntraID, ident.Role, ident.Name).Scan(
+	err := d.pool.QueryRow(ctx, query, ident.ExternalID, ident.Role, ident.Name).Scan(
 		&u.ID,
-		&u.EntraID,
+		&u.ExternalID,
 		&u.Role,
 		&u.Name,
 	)
@@ -425,4 +426,3 @@ func (d *DB) Reject(ctx context.Context, jobID string, reason string, reviewerID
 
 	return tx.Commit(ctx)
 }
-

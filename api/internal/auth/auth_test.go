@@ -13,12 +13,12 @@ type fakeUserStore struct {
 
 func (f *fakeUserStore) UpsertUser(ctx context.Context, ident Identity) (User, error) {
 	u := User{
-		ID:      "user-id-" + ident.EntraID,
-		EntraID: ident.EntraID,
-		Role:    ident.Role,
-		Name:    ident.Name,
+		ID:         "user-id-" + ident.ExternalID,
+		ExternalID: ident.ExternalID,
+		Role:       ident.Role,
+		Name:       ident.Name,
 	}
-	f.users[ident.EntraID] = u
+	f.users[ident.ExternalID] = u
 	return u, nil
 }
 
@@ -94,7 +94,7 @@ func TestAuth_Success(t *testing.T) {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
 
-	if capturedUser.Role != "student" || capturedUser.EntraID != "entra-student-1" {
+	if capturedUser.Role != "student" || capturedUser.ExternalID != "entra-student-1" {
 		t.Errorf("unexpected user in context: %+v", capturedUser)
 	}
 }

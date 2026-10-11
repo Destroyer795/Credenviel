@@ -170,7 +170,7 @@ func (s *JWTIdentitySource) Identify(r *http.Request) (Identity, error) {
 	}
 
 	return Identity{
-		EntraID: entraID,
+		ExternalID: entraID,
 		Role:    role,
 		Name:    name,
 	}, nil

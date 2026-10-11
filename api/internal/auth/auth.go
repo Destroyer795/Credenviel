@@ -13,17 +13,17 @@ var userContextKey = contextKey{}
 
 // User represents an authenticated and provisioned user in the system.
 type User struct {
-	ID      string `json:"id"`
-	EntraID string `json:"entra_id"`
-	Role    string `json:"role"` // "issuer" or "student"
-	Name    string `json:"name"`
+	ID         string `json:"id"`
+	ExternalID string `json:"external_id"` // Firebase UID (stored in the users.entra_id column)
+	Role       string `json:"role"`        // "issuer" or "student"
+	Name       string `json:"name"`
 }
 
 // Identity holds claims extracted by an IdentitySource.
 type Identity struct {
-	EntraID string
-	Role    string
-	Name    string
+	ExternalID string
+	Role       string
+	Name       string
 }
 
 // IdentitySource extracts caller identity from an HTTP request.
@@ -36,20 +36,25 @@ type UserStore interface {
 	UpsertUser(ctx context.Context, ident Identity) (User, error)
 }
 
+// IdentityFunc adapts a function to the IdentitySource interface.
+type IdentityFunc func(r *http.Request) (Identity, error)
+
+func (f IdentityFunc) Identify(r *http.Request) (Identity, error) { return f(r) }
+
 // DevHeaderSource extracts dev authentication headers.
 type DevHeaderSource struct{}
 
 func (d DevHeaderSource) Identify(r *http.Request) (Identity, error) {
-	entraID := strings.TrimSpace(r.Header.Get("X-Dev-User"))
+	externalID := strings.TrimSpace(r.Header.Get("X-Dev-User"))
 	role := strings.TrimSpace(r.Header.Get("X-Dev-Role"))
 	name := strings.TrimSpace(r.Header.Get("X-Dev-Name"))
 
-	if entraID == "" || role == "" {
+	if externalID == "" || role == "" {
 		return Identity{}, errors.New("missing required dev auth headers (X-Dev-User, X-Dev-Role)")
 	}
 
 	if name == "" {
-		name = entraID
+		name = externalID
 	}
 
 	if role != "issuer" && role != "student" {
@@ -57,9 +62,9 @@ func (d DevHeaderSource) Identify(r *http.Request) (Identity, error) {
 	}
 
 	return Identity{
-		EntraID: entraID,
-		Role:    role,
-		Name:    name,
+		ExternalID: externalID,
+		Role:       role,
+		Name:       name,
 	}, nil
 }
 
