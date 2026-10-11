@@ -1,4 +1,4 @@
-.PHONY: up down setup migrate migrate-down migrate-local run-api run-worker simulate-upload test test-integration test-azure run-api-azure migrate-azure package-function e2e-azure scale-test-azure demo lint
+.PHONY: firebase-emulator run-api-firebase up down setup migrate migrate-down migrate-local run-api run-worker simulate-upload test test-integration test-azure run-api-azure migrate-azure package-function e2e-azure scale-test-azure demo lint
 
 # Start local Postgres + Azurite (credenviel- containers only)
 up:
@@ -34,6 +34,16 @@ migrate-local:
 	@echo "Applying local queue table..."
 	docker compose exec -T postgres psql -U credenviel -d credenviel < db/local/001_local_queue.up.sql
 	@echo "Local queue table applied."
+
+# Start the Firebase Auth Emulator (no Google account needed; uses a demo- project)
+firebase-emulator:
+	npx --yes firebase-tools emulators:start --only auth --project demo-credenviel
+
+# Run the Go API verifying Firebase ID tokens from the local Auth Emulator
+run-api-firebase:
+	cd api && AUTH_MODE=firebase APP_ENV=local FIREBASE_PROJECT_ID=demo-credenviel \
+		FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+		FIREBASE_ISSUER_EMAILS=$${FIREBASE_ISSUER_EMAILS:-examcell@university.edu} go run ./cmd/server
 
 # Run Go API server locally
 run-api:
