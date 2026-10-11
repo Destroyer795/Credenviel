@@ -115,16 +115,16 @@ Retrying a blob-created event on an already `queued` job re-sends the queue mess
 
 ---
 
-## 4. User Provisioning (JIT via Entra ID)
+## 4. User Provisioning (JIT via Firebase Authentication)
 
 **Status: APPROVED / ACTIVE**
 
 Because `jobs.uploader_id` enforces a foreign key constraint referencing `users(id)`, a user row must exist before an upload can be initiated:
 
-1. When a client makes an authenticated request with a valid Entra ID Bearer JWT, the Go API authentication middleware extracts:
-   - `entra_id`: extracted from token claim `oid` (object ID) or `sub`.
-   - `name`: extracted from token claim `name`.
-   - `role`: derived from Entra app roles claim `roles` (`issuer` or `student`).
+1. When a client makes an authenticated request with a valid Firebase ID token (`Authorization: Bearer <token>`), the Go API authentication middleware verifies it (RS256 signature against Google's published `securetoken` certificates, `iss = https://securetoken.google.com/<FIREBASE_PROJECT_ID>`, `aud = <FIREBASE_PROJECT_ID>`, expiry) and extracts:
+   - `entra_id` column: the Firebase UID (token claim `sub`). The column name predates the move to Firebase.
+   - `name`: token claim `name`, falling back to the email local-part, then the UID.
+   - `role`: resolved server-side, never from client input: (a) the `role` custom claim (`issuer` or `student`) set via the Firebase Admin SDK; else (b) `issuer` if the token's email is `email_verified` and listed in `FIREBASE_ISSUER_EMAILS`; else (c) `student`.
 2. The middleware executes an upsert:
    ```sql
    INSERT INTO users (entra_id, role, name)
@@ -137,8 +137,8 @@ Because `jobs.uploader_id` enforces a foreign key constraint referencing `users(
 
 ### Dev Authentication Contract (Phase 1 addition — PROPOSED)
 
-When running in local dev mode (`AUTH_MODE=dev` AND `APP_ENV=local`), Entra ID JWTs are replaced with HTTP headers:
-- `X-Dev-User`: Simulated Entra ID (object ID or subject). Required.
+When running in local dev mode (`AUTH_MODE=dev` AND `APP_ENV=local`), Firebase ID tokens are replaced with HTTP headers:
+- `X-Dev-User`: Simulated user ID (Firebase UID). Required.
 - `X-Dev-Role`: Simulated user role (`issuer` or `student`). Required.
 - `X-Dev-Name`: Simulated display name. Required.
 
@@ -234,8 +234,8 @@ All services use pluggable storage and queue backends selected via environment v
 | Group | Authentication | Details |
 |---|---|---|
 | **Public** | None | Rate limited to 30 requests/minute per client IP |
-| **Student** | Entra ID Bearer JWT | Verified against Azure Entra tenant; must contain `Student` in `roles` claim |
-| **Issuer** | Entra ID Bearer JWT | Verified against Azure Entra tenant; must contain `Issuer` in `roles` claim |
+| **Student** | Firebase ID token (Bearer) | Verified against the Firebase project; default role for any authenticated user |
+| **Issuer** | Firebase ID token (Bearer) | Verified against the Firebase project; requires `role: issuer` custom claim or a verified email on `FIREBASE_ISSUER_EMAILS` |
 | **Internal** | Shared Secret Header | Requires `X-Internal-Secret: <INTERNAL_API_KEY>` (managed in Key Vault); restricted to Container Apps internal virtual network ingress |
 
 ### SignalR Negotiation

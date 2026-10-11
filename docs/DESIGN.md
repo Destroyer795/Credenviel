@@ -122,7 +122,7 @@ This diagram covers the document-processing core; cross-cutting concerns — the
 | Workers | Container Apps + KEDA | Scales 0→N on Service Bus queue depth | Functions Premium with a Service Bus trigger — keeps at least one always-ready instance running, so it can't scale to zero cost the way Container Apps + KEDA can |
 | OCR / extraction | AI Document Intelligence, custom model | Structured fields with a per-field confidence score | Self-hosted Tesseract — gives text only, no trained field-level extraction |
 | Database | PostgreSQL Flexible Server | Structured, relational job and record storage | Cosmos DB — rejected, the data is relational, with foreign keys and transactional status updates |
-| Auth | Microsoft Entra ID, app roles | Role-based access for issuer and student | Entra External ID for the verifier flow — dropped, the public verification page needs no login |
+| Auth | ~~Microsoft Entra ID, app roles~~ → **Firebase Authentication** (D-052) | Role-based access for issuer and student | Entra External ID for the verifier flow — dropped, the public verification page needs no login |
 | Secrets | Azure Key Vault | Connection strings and API keys, referenced, not hardcoded | — |
 | Container images | Azure Container Registry | Holds worker and API images | Must exist before the first CI/CD push |
 | Monitoring | Application Insights + Azure Monitor | Request tracing, KEDA scaling events, dead-letter alerts | — |
@@ -180,6 +180,8 @@ Ten steps take a document from upload to a verifiable record.
 ---
 
 ## Security & Access Control
+
+> **Update (D-052):** user authentication now uses Firebase Authentication instead of Microsoft Entra ID. The API verifies Firebase ID tokens and resolves roles from a `role` custom claim or a verified-email issuer allow-list; the Entra references in this section describe the original design. See [FIREBASE_SETUP.md](FIREBASE_SETUP.md) and CONTRACTS §4.
 
 Two roles — issuer and student — carry different permissions, enforced through Microsoft Entra ID; the verifier needs no identity at all.
 
