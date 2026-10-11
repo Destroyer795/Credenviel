@@ -4,10 +4,10 @@ import { getAuth, connectAuthEmulator, GoogleAuthProvider } from 'firebase/auth'
 const env = import.meta.env
 
 const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY || 'AIzaSyBWo2LDtob1yRjZ2yMwCKD1VapWQDJ6oB4',
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'credenviel.firebaseapp.com',
-  projectId: env.VITE_FIREBASE_PROJECT_ID || 'credenviel',
-  appId: env.VITE_FIREBASE_APP_ID || '1:562746294362:web:fd30ac3f5a41d8ae1f1863',
+  apiKey: env.VITE_FIREBASE_API_KEY || '',
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: env.VITE_FIREBASE_PROJECT_ID || '',
+  appId: env.VITE_FIREBASE_APP_ID || '',
 }
 
 export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean)
