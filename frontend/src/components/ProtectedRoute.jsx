@@ -5,9 +5,19 @@ import { IconLock, IconAlertTriangle, IconGraduationCap, IconBuilding, IconShiel
 import { AuthModal } from './AuthModal'
 
 export function ProtectedRoute({ allowedRoles, children }) {
-  const { user, isAuthenticated, logout } = useAuth()
+  const { user, isAuthenticated, loading, sessionError, logout, refreshSession, retrySession, resendVerification } = useAuth()
   const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [accessNote, setAccessNote] = useState('')
   const navigate = useNavigate()
+
+  // 0. Restoring a persisted Firebase session
+  if (loading) {
+    return (
+      <div className="page-container" style={{ minHeight: '65vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: 'var(--text-sub)', fontSize: '0.9rem' }}>Checking your session…</p>
+      </div>
+    )
+  }
 
   // 1. Unauthenticated state
   if (!isAuthenticated) {
@@ -33,6 +43,15 @@ export function ProtectedRoute({ allowedRoles, children }) {
           <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.5rem' }}>
             Campus Authentication Required
           </h2>
+
+          {sessionError && (
+            <div className="auth-modal-error" role="alert" style={{ textAlign: 'left' }}>
+              We couldn&apos;t verify your session: {sessionError}{' '}
+              <button type="button" className="auth-toggle-mode" onClick={retrySession}>
+                Retry
+              </button>
+            </div>
+          )}
 
           <p style={{ fontSize: '0.88rem', color: 'var(--text-sub)', lineHeight: 1.55, marginBottom: '2rem' }}>
             This portal is restricted to authorized university students, registrars, and administrative staff. Please sign in or register your institutional profile to continue.
@@ -118,7 +137,7 @@ export function ProtectedRoute({ allowedRoles, children }) {
               textAlign: 'left',
             }}
           >
-            <div><strong>Active Account:</strong> {user.email || user.oid}</div>
+            <div><strong>Active Account:</strong> {user.email || user.uid}</div>
             <div><strong>Granted Role:</strong> {roleLabels[user.role] || user.role}</div>
             <div><strong>Required Role:</strong> {requiredLabels}</div>
           </div>
@@ -133,11 +152,49 @@ export function ProtectedRoute({ allowedRoles, children }) {
               <IconArrowRight size={16} />
             </Link>
 
+            {!user.emailVerified && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', lineHeight: 1.5, margin: 0 }}>
+                Exam cell access requires a verified email address. Open the verification link we emailed you,
+                then refresh your access.{' '}
+                <button
+                  type="button"
+                  className="auth-toggle-mode"
+                  onClick={async () => {
+                    try {
+                      await resendVerification()
+                      setAccessNote('Verification email sent.')
+                    } catch {
+                      setAccessNote('Could not send the email yet. Please wait a minute and try again.')
+                    }
+                  }}
+                >
+                  Resend email
+                </button>
+              </p>
+            )}
+
             <button
               className="btn btn-secondary"
               style={{ width: '100%', padding: '0.7rem', justifyContent: 'center' }}
-              onClick={() => {
-                logout()
+              onClick={async () => {
+                try {
+                  await refreshSession()
+                  setAccessNote('Access refreshed. If nothing changed, your account has no access to this station.')
+                } catch {
+                  setAccessNote('Could not refresh your session. Please sign in again.')
+                }
+              }}
+            >
+              <span>Refresh My Access</span>
+            </button>
+
+            {accessNote && <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', margin: 0 }}>{accessNote}</p>}
+
+            <button
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '0.7rem', justifyContent: 'center' }}
+              onClick={async () => {
+                await logout()
                 setAuthModalOpen(true)
               }}
             >
