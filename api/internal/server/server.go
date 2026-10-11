@@ -20,6 +20,12 @@ import (
 	"github.com/Destroyer795/Credenviel/api/internal/storage"
 )
 
+// Authenticated requests re-sync the caller's profile at most this often when it is unchanged.
+const (
+	userSyncTTL       = 30 * time.Second
+	userSyncCacheSize = 10000
+)
+
 type Server struct {
 	cfg         *config.Config
 	userStore   auth.UserStore
@@ -30,6 +36,7 @@ type Server struct {
 	readSigner  storage.ReadSigner
 	signalr     signalr.Client
 	rateLimiter *RateLimiter
+	identity    auth.IdentitySource
 	mux         *http.ServeMux
 }
 
@@ -65,7 +72,7 @@ func NewServer(
 
 	s := &Server{
 		cfg:         cfg,
-		userStore:   userStore,
+		userStore:   auth.NewCachedUserStore(userStore, userSyncTTL, userSyncCacheSize),
 		jobRepo:     jobRepo,
 		recordRepo:  recordRepo,
 		store:       store,
@@ -75,6 +82,7 @@ func NewServer(
 		rateLimiter: NewRateLimiter(30, 1*time.Minute),
 		mux:         http.NewServeMux(),
 	}
+	s.identity = newIdentitySource(cfg)
 
 	s.routes()
 	return s
@@ -107,6 +115,24 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// SetIdentitySource replaces the configured identity source (used by tests to inject verifiers).
+func (s *Server) SetIdentitySource(src auth.IdentitySource) {
+	s.identity = src
+}
+
+// newIdentitySource builds the request authenticator for the configured AUTH_MODE.
+func newIdentitySource(cfg *config.Config) auth.IdentitySource {
+	if cfg != nil && cfg.AuthMode == "firebase" {
+		return auth.NewFirebaseIdentitySource(auth.FirebaseConfig{
+			ProjectID:    cfg.FirebaseProjectID,
+			IssuerEmails: auth.ParseEmailList(cfg.FirebaseIssuerEmail),
+			// Defense in depth: main.go already refuses this combination outside local.
+			AllowUnsigned: cfg.FirebaseAuthEmulatorHost != "" && cfg.AppEnv == "local",
+		})
+	}
+	return auth.DevHeaderSource{}
+}
+
 func (s *Server) RateLimiter() *RateLimiter {
 	return s.rateLimiter
 }
@@ -126,23 +152,13 @@ func (s *Server) routes() {
 	// Public verification route (rate limited to 30 requests/minute per IP)
 	s.mux.Handle("GET /api/v1/verify/{id}", s.rateLimiter.Wrap(http.HandlerFunc(s.handlePublicVerify)))
 
-	var identitySource auth.IdentitySource
-	switch s.cfg.AuthMode {
-	case "dev":
-		identitySource = auth.DevHeaderSource{}
-	case "entra", "jwt":
-		identitySource = auth.NewJWTIdentitySource(auth.JWTConfig{
-			TenantID:        s.cfg.EntraTenantID,
-			ClientID:        s.cfg.EntraClientID,
-			Audience:        s.cfg.EntraAudience,
-			SymmetricSecret: s.cfg.JWTSymmetricSecret,
-		})
-	default:
-		identitySource = auth.DevHeaderSource{}
-	}
+	// Auth middleware (resolves the identity source per request so it can be swapped in tests)
+	authMiddleware := auth.Middleware(auth.IdentityFunc(func(r *http.Request) (auth.Identity, error) {
+		return s.identity.Identify(r)
+	}), s.userStore)
 
-	// Auth middleware
-	authMiddleware := auth.Middleware(identitySource, s.userStore)
+	// Current user profile (role is resolved server-side from the verified token)
+	s.mux.Handle("GET /api/v1/me", authMiddleware(http.HandlerFunc(s.handleMe)))
 
 	// Authenticated jobs routes
 	s.mux.Handle("POST /api/v1/jobs", authMiddleware(http.HandlerFunc(s.handleCreateJob)))
@@ -166,6 +182,16 @@ func (s *Server) routes() {
 		s.mux.HandleFunc("PUT /dev/upload/{job_id}/{file}", s.handleDevUpload)
 		s.mux.HandleFunc("GET /dev/preview/{path...}", s.handleDevPreview)
 	}
+}
+
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.FromContext(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -772,4 +798,3 @@ func (s *Server) handleDevPreview(w http.ResponseWriter, r *http.Request) {
 
 	io.Copy(w, rc)
 }
-

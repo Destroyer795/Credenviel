@@ -27,10 +27,11 @@ type Config struct {
 	StoreBackend        string
 	StorageAccountName  string
 	AzureClientID       string
-	EntraTenantID       string
-	EntraClientID       string
-	EntraAudience       string
-	JWTSymmetricSecret  string
+	FirebaseProjectID   string
+	FirebaseIssuerEmail string // comma-separated emails granted the issuer role
+	// FirebaseAuthEmulatorHost (host:port) enables the local Firebase Auth Emulator.
+	// Only honored when AppEnv is "local"; startup fails otherwise.
+	FirebaseAuthEmulatorHost string
 }
 
 // Load reads configuration using the provided environment lookup function.
@@ -41,9 +42,6 @@ func LoadWith(getenv func(string) string) *Config {
 			maxUpload = parsed
 		}
 	}
-
-	clientID := getVal(getenv, "ENTRA_CLIENT_ID", "")
-	audience := getVal(getenv, "ENTRA_AUDIENCE", clientID)
 
 	dbURL := getVal(getenv, "DATABASE_URL", "")
 	if dbURL == "" {
@@ -83,10 +81,10 @@ func LoadWith(getenv func(string) string) *Config {
 		StoreBackend:        getVal(getenv, "STORE_BACKEND", "local"),
 		StorageAccountName:  getVal(getenv, "STORAGE_ACCOUNT_NAME", ""),
 		AzureClientID:       getVal(getenv, "AZURE_CLIENT_ID", ""),
-		EntraTenantID:       getVal(getenv, "ENTRA_TENANT_ID", ""),
-		EntraClientID:       clientID,
-		EntraAudience:       audience,
-		JWTSymmetricSecret:  getVal(getenv, "JWT_SYMMETRIC_SECRET", ""),
+		FirebaseProjectID:   getVal(getenv, "FIREBASE_PROJECT_ID", ""),
+		FirebaseIssuerEmail: getVal(getenv, "FIREBASE_ISSUER_EMAILS", ""),
+
+		FirebaseAuthEmulatorHost: getVal(getenv, "FIREBASE_AUTH_EMULATOR_HOST", ""),
 	}
 }
 

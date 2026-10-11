@@ -3,10 +3,8 @@ package server
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -108,10 +106,10 @@ func (m *memoryUserStore) UpsertUser(ctx context.Context, ident auth.Identity) (
 	u, ok := m.users[ident.ExternalID]
 	if !ok {
 		u = auth.User{
-			ID:      "uid-" + ident.ExternalID,
+			ID:         "uid-" + ident.ExternalID,
 			ExternalID: ident.ExternalID,
-			Role:    ident.Role,
-			Name:    ident.Name,
+			Role:       ident.Role,
+			Name:       ident.Name,
 		}
 		m.users[ident.ExternalID] = u
 	} else {
@@ -402,14 +400,13 @@ func TestDevUpload_Unit(t *testing.T) {
 	}
 }
 
-func TestServer_JWTAuthRoutes(t *testing.T) {
-	secret := "super-secure-symmetric-key-for-testing-jwt-routes-32chars"
+func TestServer_FirebaseAuthRoutes(t *testing.T) {
 	cfg := &config.Config{
-		AuthMode:           "jwt",
-		AppEnv:             "local",
-		JWTSymmetricSecret: secret,
-		MaxUploadBytes:     4194304,
-		InternalAPIKey:     "secret-key",
+		AuthMode:          "firebase",
+		AppEnv:            "local",
+		FirebaseProjectID: "credenviel-test",
+		MaxUploadBytes:    4194304,
+		InternalAPIKey:    "secret-key",
 	}
 
 	uStore := &memoryUserStore{users: make(map[string]auth.User)}
@@ -420,76 +417,73 @@ func TestServer_JWTAuthRoutes(t *testing.T) {
 
 	srv := NewServer(cfg, uStore, jRepo, recRepo, mStore, mSigner, mSigner)
 
-	// Helper to generate a test JWT
-	makeToken := func(oid, role, name string) string {
-		claims := map[string]any{
-			"oid":   oid,
-			"roles": []string{role},
-			"name":  name,
-			"exp":   time.Now().Add(1 * time.Hour).Unix(),
+	// Token verification itself is covered in the auth package; here a stub verifier maps
+	// "Bearer <uid>:<role>" to an identity so the routes' authorization can be exercised.
+	srv.SetIdentitySource(auth.IdentityFunc(func(r *http.Request) (auth.Identity, error) {
+		h := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		uid, role, ok := strings.Cut(h, ":")
+		if !ok {
+			return auth.Identity{}, errors.New("invalid or expired Firebase ID token")
 		}
-		// manual JWT creation or helper
-		tok := auth.NewJWTIdentitySource(auth.JWTConfig{SymmetricSecret: secret})
-		_ = tok
-		// Sign HS256
-		header := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" // {"alg":"HS256","typ":"JWT"}
-		claimsBytes, _ := json.Marshal(claims)
-		claimsEncoded := strings.TrimRight(base64.URLEncoding.EncodeToString(claimsBytes), "=")
-		toSign := header + "." + claimsEncoded
-		// use crypto hmac
-		h := hmacSHA256([]byte(toSign), []byte(secret))
-		sigEncoded := strings.TrimRight(base64.URLEncoding.EncodeToString(h), "=")
-		return toSign + "." + sigEncoded
+		return auth.Identity{ExternalID: uid, Role: role, Name: uid}, nil
+	}))
+
+	do := func(method, path, token, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		return rec
 	}
+	const jobBody = `{"filename":"cert.pdf","content_type":"application/pdf","size_bytes":100}`
 
 	// 1. Unauthenticated request => 401
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/jobs", strings.NewReader(`{"filename":"cert.pdf","content_type":"application/pdf","size_bytes":100}`))
-	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
+	if rec := do(http.MethodPost, "/api/v1/jobs", "", jobBody); rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 for unauthenticated request, got %d", rec.Code)
 	}
 
-	// 2. Authenticated Student request => 201
-	studentToken := makeToken("student-oid-1", "Student", "Bob Student")
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/jobs", strings.NewReader(`{"filename":"cert.pdf","content_type":"application/pdf","size_bytes":100}`))
-	req.Header.Set("Authorization", "Bearer "+studentToken)
-	rec = httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201 for valid student JWT, got %d: %s", rec.Code, rec.Body.String())
+	// 2. /me returns the server-resolved profile
+	rec := do(http.MethodGet, "/api/v1/me", "student-1:student", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /me, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var me auth.User
+	if err := json.Unmarshal(rec.Body.Bytes(), &me); err != nil {
+		t.Fatalf("failed to decode /me: %v", err)
+	}
+	if me.ExternalID != "student-1" || me.Role != "student" {
+		t.Errorf("unexpected /me payload: %+v", me)
+	}
+	if rec := do(http.MethodGet, "/api/v1/me", "", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 from /me without token, got %d", rec.Code)
 	}
 
+	// 3. Authenticated student creates a job => 201
+	rec = do(http.MethodPost, "/api/v1/jobs", "student-1:student", jobBody)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for student, got %d: %s", rec.Code, rec.Body.String())
+	}
 	var created createJobResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	// 3. Different student reading job => 404 (D-026)
-	otherStudentToken := makeToken("student-oid-2", "Student", "Charlie Student")
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/jobs/"+created.JobID, nil)
-	req.Header.Set("Authorization", "Bearer "+otherStudentToken)
-	rec = httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected 404 for other student reading job, got %d", rec.Code)
+	// 4. Different student reading the job => 404 (D-026)
+	if rec := do(http.MethodGet, "/api/v1/jobs/"+created.JobID, "student-2:student", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for other student, got %d", rec.Code)
 	}
 
-	// 4. Issuer reading job => 200
-	issuerToken := makeToken("issuer-oid-1", "Issuer", "Dr. Registrar")
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/jobs/"+created.JobID, nil)
-	req.Header.Set("Authorization", "Bearer "+issuerToken)
-	rec = httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200 for issuer reading student job, got %d", rec.Code)
+	// 5. Issuer reading the job => 200
+	if rec := do(http.MethodGet, "/api/v1/jobs/"+created.JobID, "issuer-1:issuer", ""); rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for issuer, got %d", rec.Code)
 	}
-}
 
-func hmacSHA256(data, key []byte) []byte {
-	mac := hmac.New(sha256.New, key)
-	mac.Write(data)
-	return mac.Sum(nil)
+	// 6. Student cannot reach the review queue => 403
+	if rec := do(http.MethodGet, "/api/v1/review", "student-1:student", ""); rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for student on review queue, got %d", rec.Code)
+	}
 }
 
 func TestReview_ListQueue(t *testing.T) {
@@ -975,5 +969,3 @@ func TestSignalR_BroadcastOnNotify(t *testing.T) {
 		t.Errorf("unexpected event: %+v", last)
 	}
 }
-
-

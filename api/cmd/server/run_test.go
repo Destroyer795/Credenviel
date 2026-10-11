@@ -57,36 +57,47 @@ func TestRun_UnsupportedAuthMode(t *testing.T) {
 	}
 }
 
-func TestRun_EntraMissingConfig(t *testing.T) {
+func TestRun_FirebaseMissingConfig(t *testing.T) {
 	ctx := context.Background()
 	env := map[string]string{
 		"INTERNAL_API_KEY": "secret-key",
-		"AUTH_MODE":        "entra",
-		"APP_ENV":          "local",
+		"AUTH_MODE":        "firebase",
+		"APP_ENV":          "azure",
 	}
 
 	err := run(ctx, func(k string) string { return env[k] })
 	if err == nil {
-		t.Fatalf("expected error for missing ENTRA config, got nil")
+		t.Fatalf("expected error for missing FIREBASE_PROJECT_ID, got nil")
 	}
-	if !strings.Contains(err.Error(), "ENTRA_TENANT_ID and ENTRA_CLIENT_ID") {
+	if !strings.Contains(err.Error(), "FIREBASE_PROJECT_ID") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
 
-func TestRun_JWTMissingConfig(t *testing.T) {
-	ctx := context.Background()
-	env := map[string]string{
-		"INTERNAL_API_KEY": "secret-key",
-		"AUTH_MODE":        "jwt",
-		"APP_ENV":          "local",
+func TestRun_LegacyAuthModesRejected(t *testing.T) {
+	for _, mode := range []string{"entra", "jwt"} {
+		env := map[string]string{
+			"INTERNAL_API_KEY": "secret-key",
+			"AUTH_MODE":        mode,
+			"APP_ENV":          "local",
+		}
+		err := run(context.Background(), func(k string) string { return env[k] })
+		if err == nil || !strings.Contains(err.Error(), "unsupported AUTH_MODE") {
+			t.Errorf("AUTH_MODE=%s: expected unsupported error, got %v", mode, err)
+		}
 	}
+}
 
-	err := run(ctx, func(k string) string { return env[k] })
-	if err == nil {
-		t.Fatalf("expected error for missing JWT config, got nil")
+func TestRun_FirebaseEmulatorOnlyInLocal(t *testing.T) {
+	env := map[string]string{
+		"INTERNAL_API_KEY":            "secret-key",
+		"AUTH_MODE":                   "firebase",
+		"FIREBASE_PROJECT_ID":         "credenviel-prod",
+		"FIREBASE_AUTH_EMULATOR_HOST": "127.0.0.1:9099",
+		"APP_ENV":                     "azure",
 	}
-	if !strings.Contains(err.Error(), "JWT_SYMMETRIC_SECRET or ENTRA_TENANT_ID") {
-		t.Errorf("unexpected error: %v", err)
+	err := run(context.Background(), func(k string) string { return env[k] })
+	if err == nil || !strings.Contains(err.Error(), "FIREBASE_AUTH_EMULATOR_HOST") {
+		t.Fatalf("expected emulator host to be refused outside local, got %v", err)
 	}
 }
