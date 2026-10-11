@@ -1,12 +1,6 @@
 # Certificate Digitization & Verification Pipeline — Azure Architecture Report
 
-> **Source PDF:** `Certificate Digitization & Verification Pipeline — Azure Architecture Report (1).pdf`
-> **Date:** Oct 3, 2026
-> **Author:** @Adiseshan Ramanan
-
 Course: Cloud Computing · Institution: Amrita University, Coimbatore
-Team: Adiseshan Ramanan (CB.SC.U4CSE23402) — add any teammates here before submission
-
 ---
 
 ## Problem Statement & Objectives
