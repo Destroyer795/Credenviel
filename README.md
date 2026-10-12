@@ -18,150 +18,25 @@ The project addresses the archive backlog that remains outside digital certifica
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    %% Client & Identity Tier
-    subgraph ClientTier ["1. Presentation & Verifier Layer (Azure Static Web Apps)"]
-        direction LR
-        StudentUI["🎓 Student Portal<br/>• Self-Service Upload<br/>• Job Lifecycle Tracker"]
-        IssuerUI["🏛️ Exam Cell Review Station<br/>• Live Directory Search<br/>• Split-Screen OCR Inspection<br/>• Registrar Approval & Delete"]
-        VerifyUI["🔍 Public Verification Page<br/>• QR Scanner & Proof Seal<br/>• Temporary Document Viewer"]
-    end
+![Credenviel architecture on Azure: React SPA, Firebase Authentication, Go REST API and Python worker in an Azure Container Apps environment with KEDA, Blob Storage, Event Grid, Azure Function, Service Bus, Document Intelligence, Azure SignalR and PostgreSQL](assets/architecture-diagram.png)
 
-    subgraph AuthLayer ["Identity & Access Control"]
-        FirebaseAuth["🔐 Firebase Authentication<br/>• Google OAuth & Email/Password<br/>• Role Claims: student | issuer"]
-    end
+The diagram follows one document from sign-in to a sealed record. Solid numbered arrows are the upload and processing path, the dotted arrows are KEDA's autoscaling control, and the dashed arrow is browser reads. The Go REST API (`ca-api-n2ivlk5gk235i`) and the Python worker (`ca-worker-n2ivlk5gk235i`) run as two container apps in one Azure Container Apps environment (`cae-cred-n2ivlk5gk235i`).
 
-    %% Ingestion & API Gateway Tier
-    subgraph APITier ["2. API Gateway & Management (Azure Container Apps)"]
-        direction TB
-        GoAPI["⚡ Go REST API Service<br/>• Auth Middleware & JIT User Provisioning<br/>• User-Delegation Write SAS Signer<br/>• Job CRUD & Cascading Record Deletion<br/>• Rate-Limited Public Verifier (/verify/:id)"]
-    end
+1. **Sign in.** The browser signs in with Firebase Authentication and receives an ID token.
+2. **Create the job.** `POST /api/v1/jobs` with the token; the API verifies it, inserts an `awaiting_upload` job and returns a 15-minute write SAS.
+3. **Upload directly.** The browser PUTs the file to the private `raw-uploads` container; file bytes never pass through the API.
+4. **React to the upload.** Event Grid emits `BlobCreated` for `raw-uploads/` and pushes it to the Azure Function.
+5. **Validate and queue.** The Function checks size and magic bytes, marks the job `queued` in PostgreSQL and enqueues the job id on Service Bus.
+6. **Scale and extract.** KEDA watches the queue depth and scales the worker (one replica per 5 waiting messages); the worker receives the message and sends the file to Document Intelligence.
+7. **Seal.** In one transaction the worker writes the record with both SHA-256 hashes and the final status, and stores a QR-stamped PDF in `stamped-documents`.
+8. **Push status.** The worker calls the API's internal notify endpoint; the API publishes to Azure SignalR, which pushes the status to the browser over WebSocket (portals fall back to polling every 3–4 s).
+9. **Read.** The exam cell reviews, approves or rejects through the API, and anyone with the QR code uses the rate-limited public `GET /api/v1/verify/{id}`.
 
-    %% Direct Storage & Event-Driven Triggers
-    subgraph IngestionPipeline ["3. Direct Ingestion & Event Grid Trigger"]
-        direction TB
-        RawUploads[("📦 Azure Blob Storage<br/>Container: raw-uploads<br/>• Private Access & Direct PUT")]
-        EventGrid["⚡ Azure Event Grid<br/>• System Topic: Microsoft.Storage<br/>• Event: BlobCreated"]
-        AzFunction["⚙️ Azure Function (Python)<br/>• MIME & Magic Byte Security Validation<br/>• State Transition: awaiting_upload ➔ queued"]
-    end
+### Job lifecycle
 
-    %% Async Decoupling & Serverless Processing
-    subgraph ComputeTier ["4. Asynchronous Queue & Auto-Scaling (KEDA)"]
-        direction TB
-        ServiceBus["📬 Azure Service Bus<br/>• Queue: job-processing<br/>• Dead-Letter Queue (DLQ) for Poison Messages"]
-        KEDA["📈 KEDA Metric Autoscaler<br/>• Scales Workers 0 ➔ N from Queue Depth<br/>• Scale-to-Zero on Idle"]
-        Worker["🐍 Python Processing Worker<br/>(Azure Container Apps)"]
-    end
+![Job lifecycle: awaiting_upload, queued, processing, then processed or needs_review; needs_review becomes processed when the issuer approves; any state can move to failed](assets/job-lifecycle.png)
 
-    %% AI Intelligence & Cryptography
-    subgraph ExtractionCrypto ["5. AI Extraction & Cryptographic Sealing"]
-        direction TB
-        DocIntel["🧠 Azure AI Document Intelligence<br/>• Structured Field Extraction<br/>• Per-Field & Cell Confidence Scores"]
-        CryptoEngine["🔒 Cryptographic Engine<br/>• Canonical Unicode NFC Normalization<br/>• SHA-256 Source & Fields Hash<br/>• QR-Stamped Verification PDF"]
-        StampedDocs[("📜 Azure Blob Storage<br/>Container: stamped-documents<br/>• QR Stamped Certificate PDFs")]
-    end
-
-    %% Persistence & Live Updates
-    subgraph DataTier ["6. Persistence, Secrets & Live Telemetry"]
-        direction TB
-        Postgres[("🐘 Azure PostgreSQL Flexible Server<br/>• Tables: users, jobs, records<br/>• Trigger Guards: trg_jobs_status_guard")]
-        KeyVault["🔑 Azure Key Vault<br/>• Managed Identity Secret Injection"]
-        SignalR["📡 Azure SignalR Service<br/>• Live Job Status Broadcast to Frontend"]
-    end
-
-    %% Connections & Workflows
-    ClientTier -.->|Authenticate| FirebaseAuth
-    FirebaseAuth -.->|Bearer JWT Token| GoAPI
-
-    %% 1. Upload Flow
-    StudentUI -->|1. Request Upload SAS| GoAPI
-    IssuerUI -->|1. Request Upload SAS| GoAPI
-    GoAPI -->|2. Generate 15-min PUT SAS| ClientTier
-    ClientTier -->|3. Direct PUT Upload| RawUploads
-
-    %% 2. Ingestion Flow
-    RawUploads -->|4. BlobCreated Event| EventGrid
-    EventGrid -->|5. Push Event| AzFunction
-    AzFunction -->|6. Set Status: queued| Postgres
-    AzFunction -->|7. Enqueue job_id message| ServiceBus
-
-    %% 3. Worker Processing Flow
-    ServiceBus -->|Queue Depth Metric| KEDA
-    KEDA -.->|Scale 0 ➔ N Replicas| Worker
-    ServiceBus -->|8. Peek-Lock Message| Worker
-    Worker -->|9. Extract Certificate Data| DocIntel
-    DocIntel -->|Fields & Confidence Scores| Worker
-    Worker -->|10. Compute SHA-256 & Stamp QR| CryptoEngine
-    CryptoEngine -->|Store Stamped PDF| StampedDocs
-    Worker -->|11. ACID Record & Status Finalization| Postgres
-    Worker -->|12. Notify API| GoAPI
-    GoAPI -->|13. Push Status Update| SignalR
-    SignalR -.->|Live WebSocket Refresh| StudentUI
-    SignalR -.->|Live WebSocket Refresh| IssuerUI
-
-    %% 4. Review & Approval Flow
-    IssuerUI -->|14. Inspect, Search Directory, Approve/Delete| GoAPI
-    GoAPI -->|Promote to Confirmed by Registrar / Cascade Delete| Postgres
-
-    %% 5. Public Verification Flow
-    VerifyUI -->|15. Scan QR / Fetch Verification ID| GoAPI
-    GoAPI -->|Retrieve Seal, Hashes & 15-min Read SAS| Postgres
-    GoAPI -->|Verify Proof & Display Document| VerifyUI
-```
-
-### Processing sequence
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Student / Issuer
-    participant FE as React SPA (Static Web Apps)
-    participant API as Go API (Container Apps)
-    participant Blob as Blob Storage (raw-uploads)
-    participant Func as Azure Function
-    participant SB as Service Bus (job-processing)
-    participant Worker as Python Worker (KEDA)
-    participant OCR as AI Document Intelligence
-    participant DB as PostgreSQL Flexible Server
-    participant Stamped as Blob Storage (stamped-documents)
-    participant Verifier as Public Verifier / Employer
-
-    User->>FE: Select certificate scan for upload
-    FE->>API: POST /api/v1/jobs (Bearer JWT)
-    API->>DB: INSERT INTO jobs (status='awaiting_upload')
-    API-->>FE: Return job_id + 15-min Scoped Write SAS
-    FE->>Blob: Direct PUT raw-uploads/{job_id}/{filename}
-    Blob->>Func: Event Grid BlobCreated event
-    Func->>DB: UPDATE jobs SET status='queued'
-    Func->>SB: Enqueue message {job_id}
-    SB->>Worker: Peek-Lock message (KEDA scales 0→N)
-    Worker->>DB: UPDATE jobs SET status='processing'
-    Worker->>OCR: Analyze document (custom/prebuilt model)
-    OCR-->>Worker: Extracted fields + Confidence scores
-    alt All field confidences >= 0.85
-        Worker->>Worker: Compute canonical SHA-256 hashes & stamp QR
-        Worker->>Stamped: Upload stamped_certificate.pdf
-        Worker->>DB: Transactional INSERT records + status='processed'
-    else Any confidence < 0.85 or empty date
-        Worker->>DB: Transactional INSERT records + status='needs_review'
-    end
-    Worker->>SB: Complete message (remove from queue)
-    Worker->>API: POST /internal/v1/jobs/:id/notify
-    API-->>FE: Azure SignalR live status broadcast
-
-    opt Review & Approval Workflow (Exam Cell)
-        User->>FE: Review Station: Search & inspect low-confidence scan
-        FE->>API: POST /api/v1/review/:id/resolve (Corrections or Approve)
-        API->>DB: UPDATE records SET verified_by_issuer=true, status='processed'
-    end
-
-    opt Public Verification Workflow
-        Verifier->>API: GET /api/v1/verify/:publicVerificationId (or QR scan)
-        API->>DB: Query record hashes, authority, verified_by_issuer
-        API-->>Verifier: Return verification proof ("Uploaded by Student" or "Confirmed by University Registrar")
-    end
-```
+Every job has one status that only moves along these arrows. A PostgreSQL trigger (`check_status_transition`) rejects any other change, so a bug or a redelivered message can never move a job backwards. A job is `processed` only when every extracted field and table cell scores at least 0.85; otherwise it goes to `needs_review` for the exam cell. Failures keep their reason on the job.
 
 ### Service selection
 
