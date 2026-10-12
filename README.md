@@ -144,6 +144,37 @@ PostgreSQL migrations enforce foreign keys, unique verification IDs, valid statu
 - SHA-256 source and canonical field hashes detect later changes.
 - Empty OCR output is routed to `needs_review`, not falsely marked processed.
 
+## Load Testing and Azure Metrics
+
+All values below are measured; where a value has not been measured, the table says so.
+
+### Azure Monitor: queue burst on 8–9 October 2026
+
+![Azure Monitor metrics, 8 to 9 October 2026: two bursts of queue messages, backlog peaking at 26 and dead-lettered messages at 60, worker replicas flat at 1, Document Intelligence pages processed from 9 October 13:00 UTC](assets/azure-metrics-burst.png)
+
+Hourly metrics read from Azure Monitor (`az monitor metrics list`) on 12 October 2026. Service Bus metrics are namespace-wide, so they include the `job-processing-test` queue as well as `job-processing`.
+
+| Measure | Recorded value | Source |
+|---|---|---|
+| Uploads (messages enqueued) | 54 between 13:00 and 15:00 UTC on 8 Oct; 64 at 06:00 UTC on 9 Oct | Service Bus `IncomingMessages` |
+| Extractor mode | Live worker configured for real OCR (`prebuilt-layout`, F0); no pages were processed during the 8 Oct burst | Worker env, `ProcessedPages` |
+| Worker replicas: start / peak / final | 1 / 1 / 1 | Container Apps `Replicas` (hourly max) |
+| Time to first extra replica / to peak | Not applicable: the worker never scaled out (no KEDA scale rule is configured) | `Replicas` |
+| Peak queue backlog | 26 messages | Service Bus `ActiveMessages` |
+| Dead-lettered messages | Rose to 55 on 8 Oct and 60 on 9 Oct; 4 in `job-processing` on 12 Oct | `DeadletteredMessages`, queue count |
+| p50 / p95 upload-to-final-status latency | Not measured on Azure (hourly metrics cannot give per-job latency; see below) | — |
+| Failed jobs | Not measured (needs a database query) | — |
+| Document Intelligence usage | 247 calls and 59 pages in 7 days, about 12% of the F0 free quota of 500 pages a month | `TotalCalls`, `ProcessedPages` |
+| PostgreSQL | Burstable B1ms, state `Ready`, so it bills hourly while running | `az postgres flexible-server show` |
+
+`make scale-test-azure` has not been run for this record: its local API connects straight to the Azure PostgreSQL server, whose firewall does not allow the machine used here. Allowing that machine's IP (or running from an allowed network) lets the runner record per-job latency.
+
+### Local load test: authentication and job path
+
+![Local load test output from 11 October 2026: one million requests per phase at 200 concurrent connections with zero transport errors](assets/local-load-test.png)
+
+Run on 11 October 2026 on one development machine: the Go API in `AUTH_MODE=firebase` with Firebase Auth Emulator tokens and a Docker PostgreSQL 16 database. These numbers describe the API's authentication and job-creation path, not the Azure deployment. Across five million requests there were no transport errors and every response had the expected status. Memory stayed near 35 MB and open file descriptors returned to 16 after the run. Twenty-five simultaneous first logins per user created no duplicate users, and forged `role=issuer` tokens created no issuer accounts.
+
 ## Local Development
 
 ### Prerequisites
