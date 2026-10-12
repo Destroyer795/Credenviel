@@ -264,7 +264,17 @@ function PhysicalScanViewer({ formData, jobId, jobMeta, zoom = 1, includeMarks =
  * High-Density Digital Credential Extracted Preview
  * Embeds official digital certificate format, live form values, and verifiable QR code
  */
-function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = true, documentType = 'grade_sheet', attributes = [], jobMeta }) {
+function DigitalExtractedPreview({
+  formData,
+  jobId,
+  verifyUrl,
+  includeMarks = true,
+  documentType = 'grade_sheet',
+  attributes = [],
+  jobMeta,
+  recordMeta,
+  actionDone,
+}) {
   const isTC = documentType === 'transfer_certificate'
   const isBonafide = documentType === 'bonafide_certificate'
   const isConduct = documentType === 'conduct_certificate'
@@ -290,6 +300,31 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
     (formData.marks && formData.marks.length > 0) ||
     (attributes && attributes.length > 0)
   )
+
+  const isConfirmed = Boolean(
+    actionDone === 'approved' ||
+    recordMeta?.verified_by_issuer === true ||
+    jobMeta?.verified_by_issuer === true
+  )
+  const isRejected = Boolean(
+    actionDone === 'rejected' ||
+    jobMeta?.status === 'failed' ||
+    recordMeta?.status === 'failed' ||
+    jobMeta?.status === 'rejected' ||
+    recordMeta?.status === 'rejected'
+  )
+
+  const footerStatusText = isRejected
+    ? '• Rejected by University Authority'
+    : isConfirmed
+    ? '• Confirmed by University Registrar & Sealed'
+    : '• Pending Examination Verification'
+
+  const footerStatusColor = isRejected
+    ? 'var(--status-rose-text, #9F1239)'
+    : isConfirmed
+    ? 'var(--status-emerald-text, #166534)'
+    : 'var(--status-amber-text, #92400E)'
 
   if (isQueued || isProcessing || !hasExtractedData) {
     const fileName = jobMeta?.blob_key ? jobMeta.blob_key.split('/').pop() : 'Document file'
@@ -443,16 +478,30 @@ function DigitalExtractedPreview({ formData, jobId, verifyUrl, includeMarks = tr
           <div><strong>Conferred:</strong> {formData.issue_date || '—'}</div>
           <div><strong>Roll No:</strong> {formData.roll_number || '—'}</div>
           <div><strong>Reg No:</strong> {formData.register_number || '—'}</div>
-          <div style={{ marginTop: '0.35rem', color: jobMeta?.status === 'digitized' ? 'var(--status-emerald-text)' : 'var(--text-sub)', fontWeight: 600 }}>
-            {jobMeta?.status === 'digitized' ? '• Digitized & Cryptographically Signed' : '• Pending Examination Verification'}
+          <div
+            id="extracted-preview-verification-status"
+            style={{
+              marginTop: '0.35rem',
+              color: footerStatusColor,
+              fontWeight: 700,
+            }}
+          >
+            {footerStatusText}
           </div>
         </div>
 
         {/* Live Verifiable QR Code */}
         <div style={{ textAlign: 'center', flexShrink: 0 }}>
           <QRCode value={verifyUrl} size={88} />
-          <div style={{ fontSize: '0.62rem', color: '#64748B', marginTop: '0.25rem', fontWeight: 600 }}>
-            Scan to Verify
+          <div
+            style={{
+              fontSize: '0.62rem',
+              color: isRejected ? 'var(--status-rose-text, #9F1239)' : '#64748B',
+              marginTop: '0.25rem',
+              fontWeight: 600,
+            }}
+          >
+            {isRejected ? 'Revoked / Rejected' : 'Scan to Verify'}
           </div>
         </div>
       </div>
@@ -758,6 +807,7 @@ export function ReviewScreen() {
         saveJobPublicIdMapping(currentJobId, res.public_verification_id)
       }
       setRecordMeta((prev) => ({ ...(prev || {}), verified_by_issuer: true }))
+      setJobMeta((prev) => ({ ...(prev || {}), status: 'processed', verified_by_issuer: true }))
       setActionDone('approved')
       fetchQueue(currentJobId)
     } catch (err) {
@@ -806,6 +856,18 @@ export function ReviewScreen() {
       await rejectReview(currentJobId, rejectionReason, auth)
       setShowRejectModal(false)
       setActionDone('rejected')
+      setRecordMeta((prev) => ({
+        ...(prev || {}),
+        verified_by_issuer: false,
+        status: 'failed',
+        failure_reason: rejectionReason,
+      }))
+      setJobMeta((prev) => ({
+        ...(prev || {}),
+        status: 'failed',
+        failure_reason: rejectionReason,
+        verified_by_issuer: false,
+      }))
       fetchQueue(currentJobId)
     } catch (err) {
       console.error('Failed to reject review:', err)
@@ -1364,6 +1426,8 @@ export function ReviewScreen() {
                   documentType={documentType}
                   attributes={attributes}
                   jobMeta={jobMeta}
+                  recordMeta={recordMeta}
+                  actionDone={actionDone}
                 />
               )}
 
@@ -1416,6 +1480,8 @@ export function ReviewScreen() {
                       documentType={documentType}
                       attributes={attributes}
                       jobMeta={jobMeta}
+                      recordMeta={recordMeta}
+                      actionDone={actionDone}
                     />
                   </div>
                 </div>
