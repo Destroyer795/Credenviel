@@ -228,10 +228,6 @@ az bicep build --file infra/main.bicep
 
 The test suite covers API authorization, upload validation, migrations, queue semantics, OCR parsing, confidence routing, hashing vectors, retry/dead-letter behavior, atomic finalization, and Function validation.
 
-## Evaluation Coverage
-
-See [docs/EVALUATION.md](docs/EVALUATION.md) for the 20-mark rubric mapping, reproducible checks, and the small set of presentation evidence that must be captured externally.
-
 ## Repository Guide
 
 - [docs/DESIGN.md](docs/DESIGN.md) - detailed architecture report and design decisions
@@ -239,7 +235,6 @@ See [docs/EVALUATION.md](docs/EVALUATION.md) for the 20-mark rubric mapping, rep
 - [docs/DECISIONS.md](docs/DECISIONS.md) - architectural decision records
 - [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) - phased acceptance tests
 - [docs/DEPLOY.md](docs/DEPLOY.md) - Azure deployment and verification runbook
-- [docs/EVALUATION.md](docs/EVALUATION.md) - evaluator-facing mark coverage
 - [docs/EVIDENCE.md](docs/EVIDENCE.md) - reproducible evidence checklist
 - [docs/COST.md](docs/COST.md) - Azure student-credit guardrails
 
